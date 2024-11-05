@@ -1,0 +1,32 @@
+[build-system]
+requires = [
+    "setuptools>=42",
+    "wheel"
+]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "researcher"
+version = "0.1.0"
+description = "A Python package for scientific writing and research assistance."
+authors = [{name = "Your Name", email = "your.email@example.com"}]
+license = { text = "Apache-2.0" }
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "openai>=1.50.0",
+    "numpy",
+    "scipy",
+    "beautifulsoup4",
+    "markdown",
+    "python-frontmatter",
+]
+
+[tool.setuptools]
+packages = ["researcher"]
+
+[project.urls]
+Homepage = "https://github.com/yourusername/researcher"
+
+[project.entry-points."console_scripts"]
+researcher = "researcher.researcher:main"
