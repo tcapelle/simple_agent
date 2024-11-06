@@ -1,49 +1,146 @@
 import base64
 import json
 import os
-import subprocess
+from enum import Enum
+from typing import List, Dict, Optional
+from datetime import datetime
+
 import openai
 import weave
 
+from .state import AgentState
+from .rag import DenseRetriever
+
 LENGTH_LIMIT = 10000
+WORKDIR = "workdir"  # Default workspace directory
 
+# Global retriever instance
+retriever = None
 
-def critique_text(text: str, personality: str) -> str:
-    """Provide feedback on a given text based on the selected personality using LLM.
+def ensure_workdir():
+    """Ensure the workspace directory exists"""
+    if not os.path.exists(WORKDIR):
+        os.makedirs(WORKDIR)
+        print(f"Created workspace directory: {WORKDIR}")
 
-    Args:
-        text: The text to critique.
-        personality: The personality type for critique (e.g., "phd_advisor", "reviewer_number_2").
-
-    Returns:
-        The critique based on the selected personality.
+def find_manuscript():
     """
-    # Ensure prompt path is correct
-    prompt_dir = os.path.join(os.path.dirname(__file__), 'prompts')
-    prompt_path = os.path.join(prompt_dir, f"{personality}.txt")
-    with open(prompt_path, 'r') as f:
-        system_prompt = f.read()
+    Find the manuscript file in either current directory or workdir.
+    Returns tuple of (path, location_description).
+    """
+    # Check common manuscript filenames
+    possible_names = ["manuscript.txt", "current_manuscript.txt"]
+    
+    # First check workdir
+    ensure_workdir()
+    for name in possible_names:
+        path = os.path.join(WORKDIR, name)
+        if os.path.exists(path):
+            return path, "workdir"
+    
+    # Then check current directory
+    for name in possible_names:
+        if os.path.exists(name):
+            return name, "current directory"
+    
+    # If no manuscript found, return default path in workdir
+    return os.path.join(WORKDIR, "manuscript.txt"), "workdir"
 
-    # Prepare the messages for the LLM
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": text}
-    ]
+def get_manuscript_backup_path():
+    """Get a timestamped backup path for the manuscript"""
+    manuscript_path, _ = find_manuscript()
+    base_dir = os.path.dirname(manuscript_path)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    return os.path.join(base_dir, f"manuscript_{timestamp}.txt")
 
-    # Initialize OpenAI client
-    client = openai.OpenAI()
+def setup_retriever(folder):
+    """Initialize the global retriever instance"""
+    global retriever
+    ensure_workdir()
+    retriever = DenseRetriever()
 
-    # Call the OpenAI LLM using the updated chat completion API
-    response = client.chat.completions.create(
-        model="gpt-4",
-        messages=messages
+class Personality(str, Enum):
+    """Available personality types for critique"""
+    MOM = "mom"
+    PHD_ADVISOR = "phd_advisor"  # This will be our default
+    NICE_BROTHER = "nice_brother"
+    REVIEWER_2 = "reviewer_number_2"
+
+def count_words(text: str) -> int:
+    """Count the number of words in a text."""
+    return len(text.split())
+
+@weave.op()
+def critique_content(state: AgentState, personality: Personality = Personality.PHD_ADVISOR) -> AgentState:
+    """Get critique for the current manuscript using specified personality.
+    
+    Args:
+        state: Current agent state
+        personality: Personality to use for critique (default: phd_advisor)
+    """
+    manuscript_path, _ = find_manuscript()
+    
+    try:
+        text = read_from_file(manuscript_path)
+    except FileNotFoundError:
+        return AgentState(
+            history=state.history
+            + [{"role": "assistant", "content": "No manuscript found. Please create one first."}]
+        )
+    
+    # Check manuscript length
+    word_count = count_words(text)
+    if word_count == 0:
+        return AgentState(
+            history=state.history
+            + [{"role": "assistant", "content": "The manuscript is empty. Please provide some content first."}]
+        )
+    elif word_count < 1000:
+        return AgentState(
+            history=state.history
+            + [
+                {
+                    "role": "assistant",
+                    "content": f"The manuscript is quite short (only {word_count} words). "
+                              "Consider adding more content before requesting a critique. "
+                              "Would you like me to help expand on any particular section?",
+                }
+            ]
+        )
+    
+    critique = critique_text(text, personality)
+    return AgentState(
+        history=state.history
+        + [{"role": "assistant", "content": f"Critique ({personality}):\n\n{critique}"}]
     )
 
-    # Extract the assistant's message content
-    critique = response.choices[0].message['content']
-
-    return critique
-
+@weave.op()
+def retrieve_documents(state: AgentState, query: str, k: int = 5) -> AgentState:
+    """Retrieve relevant documents based on the query.
+    
+    Args:
+        state: Current agent state
+        query: Search query
+        k: Number of documents to retrieve (default: 5)
+    """
+    global retriever
+    if not retriever:
+        raise ValueError("Retriever not initialized. Call setup_retriever first.")
+    
+    results = retriever.search(query=query, k=k)
+    
+    return AgentState(
+        history=state.history
+        + [
+            {
+                "role": "assistant",
+                "content": f"I found {len(results)} relevant documents:\n\n"
+                + "\n\n".join(
+                    f"From {r['source']}:\n{r['text']}" for r in results
+                ),
+            }
+        ],
+    )
 
 @weave.op()
 def list_files(directory: str) -> str:
@@ -61,7 +158,6 @@ def list_files(directory: str) -> str:
         result += "\n... (truncated)"
     return result
 
-
 @weave.op()
 def write_to_file(path: str, content: str) -> str:
     """Write text to a file at the given path.
@@ -73,10 +169,19 @@ def write_to_file(path: str, content: str) -> str:
     Returns:
         A message indicating whether the file was written successfully.
     """
+    # Create backup if writing to manuscript
+    manuscript_path, _ = find_manuscript()
+    if os.path.exists(path) and path == manuscript_path:
+        backup_path = get_manuscript_backup_path()
+        with open(path, 'r') as src, open(backup_path, 'w') as dst:
+            dst.write(src.read())
+    
+    # Ensure directory exists
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+    
     with open(path, "w") as f:
         f.write(content)
-    return "File written successfully."
-
+    return f"File written successfully to {path}" + (" (backup created)" if path == manuscript_path else "")
 
 @weave.op()
 def read_from_file(path: str) -> str:
@@ -94,3 +199,21 @@ def read_from_file(path: str) -> str:
             result = result[:LENGTH_LIMIT]
             result += "\n... (truncated)"
         return result
+
+def critique_text(text: str, personality: str) -> str:
+    """Provide feedback on a given text based on the selected personality using LLM."""
+    prompt_dir = os.path.join(os.path.dirname(__file__), 'prompts')
+    prompt_path = os.path.join(prompt_dir, f"{personality}.txt")
+    with open(prompt_path, 'r') as f:
+        system_prompt = f.read()
+
+    client = openai.OpenAI()
+    response = client.chat.completions.create(
+        model="gpt-4",
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": text}
+        ]
+    )
+
+    return response.choices[0].message.content

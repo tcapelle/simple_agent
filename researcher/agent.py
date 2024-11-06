@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, List, Optional
 from pydantic import Field
 from openai import OpenAI
 from openai._types import NotGiven
@@ -9,38 +9,25 @@ from openai.types.chat import (
 import weave
 from weave.flow.chat_util import OpenAIStream
 
-from researcher.console import Console
-from researcher.tool_calling import chat_call_tool_params, perform_tool_calls
-
-
-class AgentState(weave.Object):
-    # The chat message history.
-    history: list[Any] = Field(default_factory=list)
-
+from .console import Console
+from .tool_calling import chat_call_tool_params, perform_tool_calls
+from .state import AgentState
 
 class Agent(weave.Object):
     model_name: str
     temperature: float
     system_message: str
-    tools: list[Any] = Field(default_factory=list)
+    tools: List[Any] = Field(default_factory=list)
 
     @weave.op()
     def step(self, state: AgentState) -> AgentState:
-        """Run a step of the agent.
-
-        Args:
-            state: The current state of the environment.
-            action: The action to take.
-
-        Returns:
-            The new state of the environment.
-        """
+        """Run a step of the agent."""
         Console.step_start("agent", "green")
         ref = weave.obj_ref(state)
         if ref:
             print("state ref:", ref.uri())
 
-        messages: list[ChatCompletionMessageParam] = [
+        messages: List[ChatCompletionMessageParam] = [
             {"role": "system", "content": self.system_message},
         ]
         messages += state.history
@@ -72,20 +59,16 @@ class Agent(weave.Object):
             Console.chat_response_complete(response_message.content)
 
         new_messages = []
-        # we always store the dict representations of messages in agent state
-        # instead of mixing in some pydantic objects.
         new_messages.append(response_message.model_dump(exclude_none=True))
         if response_message.tool_calls:
             new_messages.extend(
-                perform_tool_calls(self.tools, response_message.tool_calls)
+                perform_tool_calls(self.tools, response_message.tool_calls, state=state)
             )
 
         return AgentState(history=state.history + new_messages)
 
     @weave.op()
     def run(self, state: AgentState):
-        while True:
-            last_message = state.history[-1]
-            if last_message["role"] == "assistant" and "tool_calls" not in last_message:
-                return state
-            state = self.step(state)
+        """Run the agent until user intervention is needed."""
+        state = self.step(state)
+        return state

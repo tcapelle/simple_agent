@@ -1,32 +1,16 @@
-[build-system]
-requires = [
-    "setuptools>=42",
-    "wheel"
-]
-build-backend = "setuptools.build_meta"
-
-[project]
+[tool.poetry]
 name = "researcher"
 version = "0.1.0"
-description = "A Python package for scientific writing and research assistance."
-authors = [{name = "Your Name", email = "your.email@example.com"}]
-license = { text = "Apache-2.0" }
-readme = "README.md"
-requires-python = ">=3.8"
-dependencies = [
-    "openai>=1.50.0",
-    "numpy",
-    "scipy",
-    "beautifulsoup4",
-    "markdown",
-    "python-frontmatter",
-]
+description = "AI Research Assistant"
+authors = ["Your Name <your.email@example.com>"]
 
-[tool.setuptools]
-packages = ["researcher"]
+[tool.poetry.dependencies]
+python = "^3.9"
+openai = "^1.0.0"
+chromadb = "^0.4.0"
+weave = "^0.1.0"
+rich = "^13.0.0"
 
-[project.urls]
-Homepage = "https://github.com/yourusername/researcher"
-
-[project.entry-points."console_scripts"]
-researcher = "researcher.researcher:main"
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"

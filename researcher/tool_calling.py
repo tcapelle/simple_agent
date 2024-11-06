@@ -1,17 +1,17 @@
 import inspect
 import json
-from typing import Callable, get_type_hints
+from typing import Callable, get_type_hints, Any
 
 from openai.types.chat import ChatCompletionMessageToolCall, ChatCompletionToolParam
 
 from .console import Console
+from .state import AgentState
 
 
 def generate_json_schema(func: Callable) -> dict:
     """Given a function, generate an OpenAI tool compatible JSON schema.
-
-    WIP: This function is very basic and hacky. It will not work in many
-    scenarios.
+    
+    Handles special cases like AgentState and Enums.
     """
     # Extract function signature
     signature = inspect.signature(func)
@@ -36,34 +36,54 @@ def generate_json_schema(func: Callable) -> dict:
 
     # Process each parameter
     for name, param in parameters.items():
+        # Skip AgentState parameter as it's handled internally
+        if name == "state" and type_hints.get(name) == AgentState:
+            continue
+
         # Determine if this parameter is required (no default value)
         is_required = param.default == inspect.Parameter.empty
 
-        # Extract parameter type and description
-        param_type = type_hints[name].__name__ if name in type_hints else "string"
-        if param_type == "str":
-            param_type = "string"
-        param_desc = ""
+        # Get parameter type
+        param_type = type_hints.get(name, Any)
+        
+        # Convert Python types to JSON schema types
+        if param_type == str:
+            json_type = "string"
+        elif param_type == int:
+            json_type = "integer"
+        elif param_type == float:
+            json_type = "number"
+        elif param_type == bool:
+            json_type = "boolean"
+        else:
+            json_type = "string"  # Default to string for complex types
 
-        # Attempt to extract description from docstring
+        # Extract parameter description from docstring
+        param_desc = ""
         if func.__doc__:
-            doc_lines = func.__doc__.split("\n")[1:]
-            for line in doc_lines:
-                if name in line:
-                    param_desc = line.strip().split(":")[-1].strip()
+            for line in func.__doc__.split("\n"):
+                if f"{name}:" in line:
+                    param_desc = line.split(":", 1)[1].strip()
                     break
 
-        # Populate schema for this parameter
-        param_schema = {"type": param_type, "description": param_desc}
+        # Build parameter schema
+        param_schema = {
+            "type": json_type,
+            "description": param_desc
+        }
 
-        # Handle special case for enums
-        if hasattr(type_hints[name], "__members__"):  # Check if it's an Enum
-            param_schema["enum"] = [e.value for e in type_hints[name]]
+        # Handle Enum types
+        if hasattr(param_type, "__members__"):
+            param_schema["enum"] = [e.value for e in param_type]
 
-        schema["function"]["parameters"]["properties"][name] = param_schema  # type: ignore
+        # Add default value if present
+        if param.default != inspect.Parameter.empty and param.default is not None:
+            param_schema["default"] = param.default
+
+        schema["function"]["parameters"]["properties"][name] = param_schema
 
         if is_required:
-            schema["function"]["parameters"]["required"].append(name)  # type: ignore
+            schema["function"]["parameters"]["required"].append(name)
 
     return schema
 
@@ -81,8 +101,16 @@ def get_tool(tools: list[Callable], name: str) -> Callable:
 
 
 def perform_tool_calls(
-    tools: list[Callable], tool_calls: list[ChatCompletionMessageToolCall]
+    tools: list[Callable], tool_calls: list[ChatCompletionMessageToolCall], state: AgentState = None
 ) -> list[dict]:
+    """
+    Perform tool calls with the given arguments.
+    
+    Args:
+        tools: List of available tools
+        tool_calls: List of tool calls to perform
+        state: Current agent state (will be passed to tools that require it)
+    """
     messages = []
     for tool_call in tool_calls:
         function_name = tool_call.function.name
@@ -90,15 +118,23 @@ def perform_tool_calls(
         function_response = None
         tool_call_s = f"{function_name}({tool_call.function.arguments})"
         Console.tool_call_start(tool_call_s)
+        
         try:
             function_args = json.loads(tool_call.function.arguments)
+            
+            # Check if tool requires state parameter
+            sig = inspect.signature(tool)
+            if "state" in sig.parameters:
+                if state is None:
+                    raise ValueError(f"Tool {function_name} requires state but none was provided")
+                function_args["state"] = state
+            
+            function_response = tool(**function_args)
+            
         except json.JSONDecodeError as e:
             function_response = str(e)
-        if not function_response:
-            try:
-                function_response = tool(**function_args)
-            except Exception as e:
-                function_response = str(e)
+        except Exception as e:
+            function_response = str(e)
 
         additional_message = None
         if isinstance(function_response, tuple):
