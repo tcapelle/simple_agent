@@ -5,7 +5,6 @@ from typing import Callable, get_type_hints, Any
 from openai.types.chat import ChatCompletionMessageToolCall, ChatCompletionToolParam
 
 from .console import Console
-from .state import AgentState
 
 
 def generate_json_schema(func: Callable) -> dict:
@@ -36,9 +35,6 @@ def generate_json_schema(func: Callable) -> dict:
 
     # Process each parameter
     for name, param in parameters.items():
-        # Skip AgentState parameter as it's handled internally
-        if name == "state" and type_hints.get(name) == AgentState:
-            continue
 
         # Determine if this parameter is required (no default value)
         is_required = param.default == inspect.Parameter.empty
@@ -101,16 +97,8 @@ def get_tool(tools: list[Callable], name: str) -> Callable:
 
 
 def perform_tool_calls(
-    tools: list[Callable], tool_calls: list[ChatCompletionMessageToolCall], state: AgentState = None
+    tools: list[Callable], tool_calls: list[ChatCompletionMessageToolCall]
 ) -> list[dict]:
-    """
-    Perform tool calls with the given arguments.
-    
-    Args:
-        tools: List of available tools
-        tool_calls: List of tool calls to perform
-        state: Current agent state (will be passed to tools that require it)
-    """
     messages = []
     for tool_call in tool_calls:
         function_name = tool_call.function.name
@@ -118,23 +106,15 @@ def perform_tool_calls(
         function_response = None
         tool_call_s = f"{function_name}({tool_call.function.arguments})"
         Console.tool_call_start(tool_call_s)
-        
         try:
             function_args = json.loads(tool_call.function.arguments)
-            
-            # Check if tool requires state parameter
-            sig = inspect.signature(tool)
-            if "state" in sig.parameters:
-                if state is None:
-                    raise ValueError(f"Tool {function_name} requires state but none was provided")
-                function_args["state"] = state
-            
-            function_response = tool(**function_args)
-            
         except json.JSONDecodeError as e:
             function_response = str(e)
-        except Exception as e:
-            function_response = str(e)
+        if not function_response:
+            try:
+                function_response = tool(**function_args)
+            except Exception as e:
+                function_response = str(e)
 
         additional_message = None
         if isinstance(function_response, tuple):

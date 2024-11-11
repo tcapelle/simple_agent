@@ -7,7 +7,7 @@ console = RichConsole()
 class Console:
     @staticmethod
     def welcome() -> None:
-        console.rule("[bold blue]Programmer")
+        console.rule("[bold blue]Researcher")
         console.print("Welcome to researcher.\n")
 
     @staticmethod

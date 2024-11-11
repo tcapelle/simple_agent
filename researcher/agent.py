@@ -62,7 +62,7 @@ class Agent(weave.Object):
         new_messages.append(response_message.model_dump(exclude_none=True))
         if response_message.tool_calls:
             new_messages.extend(
-                perform_tool_calls(self.tools, response_message.tool_calls, state=state)
+                perform_tool_calls(self.tools, response_message.tool_calls)
             )
 
         return AgentState(history=state.history + new_messages)

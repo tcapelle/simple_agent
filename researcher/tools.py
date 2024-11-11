@@ -1,14 +1,12 @@
-import base64
 import json
 import os
 from enum import Enum
-from typing import List, Dict, Optional
 from datetime import datetime
+from typing import Optional
 
 import openai
 import weave
 
-from .state import AgentState
 from .rag import DenseRetriever
 
 LENGTH_LIMIT = 10000
@@ -71,11 +69,10 @@ def count_words(text: str) -> int:
     return len(text.split())
 
 @weave.op()
-def critique_content(state: AgentState, personality: Personality = Personality.PHD_ADVISOR) -> AgentState:
+def critique_content(personality: Personality = Personality.PHD_ADVISOR) -> str:
     """Get critique for the current manuscript using specified personality.
     
     Args:
-        state: Current agent state
         personality: Personality to use for critique (default: phd_advisor)
     """
     manuscript_path, _ = find_manuscript()
@@ -83,43 +80,39 @@ def critique_content(state: AgentState, personality: Personality = Personality.P
     try:
         text = read_from_file(manuscript_path)
     except FileNotFoundError:
-        return AgentState(
-            history=state.history
-            + [{"role": "assistant", "content": "No manuscript found. Please create one first."}]
-        )
+        return f"No manuscript found at {manuscript_path}. Please create one first."
+    print(personality)
+    critique = _critique_text(text, personality)
     
-    # Check manuscript length
-    word_count = count_words(text)
-    if word_count == 0:
-        return AgentState(
-            history=state.history
-            + [{"role": "assistant", "content": "The manuscript is empty. Please provide some content first."}]
-        )
-    elif word_count < 1000:
-        return AgentState(
-            history=state.history
-            + [
-                {
-                    "role": "assistant",
-                    "content": f"The manuscript is quite short (only {word_count} words). "
-                              "Consider adding more content before requesting a critique. "
-                              "Would you like me to help expand on any particular section?",
-                }
-            ]
-        )
-    
-    critique = critique_text(text, personality)
-    return AgentState(
-        history=state.history
-        + [{"role": "assistant", "content": f"Critique ({personality}):\n\n{critique}"}]
+    # Add suggestion to proceed with revisions
+    return (f"{critique}\n\n"
+            f"I have provided the critique above. Implement the suggested changes and save the manuscript.")
+
+@weave.op
+def _critique_text(text: str, personality: str) -> str:
+    """Provide feedback on a given text based on the selected personality using LLM."""
+    prompt_dir = os.path.join(os.path.dirname(__file__), 'prompts')
+    prompt_path = os.path.join(prompt_dir, f"{personality}.txt")
+    with open(prompt_path, 'r') as f:
+        system_prompt = f.read()
+
+    client = openai.OpenAI()
+    response = client.chat.completions.create(
+        model="gpt-4",
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": text}
+        ]
     )
 
+    return response.choices[0].message.content
+
+
 @weave.op()
-def retrieve_documents(state: AgentState, query: str, k: int = 5) -> AgentState:
+def retrieve_documents(query: str, k: int = 5) -> str:
     """Retrieve relevant documents based on the query.
     
     Args:
-        state: Current agent state
         query: Search query
         k: Number of documents to retrieve (default: 5)
     """
@@ -129,18 +122,11 @@ def retrieve_documents(state: AgentState, query: str, k: int = 5) -> AgentState:
     
     results = retriever.search(query=query, k=k)
     
-    return AgentState(
-        history=state.history
-        + [
-            {
-                "role": "assistant",
-                "content": f"I found {len(results)} relevant documents:\n\n"
-                + "\n\n".join(
-                    f"From {r['source']}:\n{r['text']}" for r in results
-                ),
-            }
-        ],
+    response = f"I found {len(results)} relevant documents:\n\n"
+    response += "\n\n".join(
+        f"From {r['source']}:\n{r['text']}" for r in results
     )
+    return response
 
 @weave.op()
 def list_files(directory: str) -> str:
@@ -200,20 +186,16 @@ def read_from_file(path: str) -> str:
             result += "\n... (truncated)"
         return result
 
-def critique_text(text: str, personality: str) -> str:
-    """Provide feedback on a given text based on the selected personality using LLM."""
-    prompt_dir = os.path.join(os.path.dirname(__file__), 'prompts')
-    prompt_path = os.path.join(prompt_dir, f"{personality}.txt")
-    with open(prompt_path, 'r') as f:
-        system_prompt = f.read()
 
-    client = openai.OpenAI()
-    response = client.chat.completions.create(
-        model="gpt-4",
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": text}
-        ]
-    )
-
-    return response.choices[0].message.content
+@weave.op()
+def request_user_input(prompt: str = "Please provide your input") -> str:
+    """Request input from the user.
+    
+    Args:
+        prompt: The prompt to show to the user
+        
+    Returns:
+        The user's input
+    """
+    print(f"\n{prompt}")
+    return input("User input: ")
