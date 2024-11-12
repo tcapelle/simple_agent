@@ -11,7 +11,7 @@ The assistant should maintain a natural conversation flow while following these 
 
 from researcher.tools import (
     list_files, write_to_file, read_from_file,
-    retrieve_documents, critique_content, suggest_revisions
+    retrieve_documents, critique_content
 )
 from researcher.agent import Agent
 

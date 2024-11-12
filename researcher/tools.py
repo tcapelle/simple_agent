@@ -7,7 +7,7 @@ from typing import Optional
 import openai
 import weave
 
-from .rag import DenseRetriever
+# from .rag import DenseRetriever
 
 LENGTH_LIMIT = 10000
 WORKDIR = "workdir"  # Default workspace directory
@@ -55,7 +55,7 @@ def setup_retriever(folder):
     """Initialize the global retriever instance"""
     global retriever
     ensure_workdir()
-    retriever = DenseRetriever()
+    # retriever = DenseRetriever()
 
 class Personality(str, Enum):
     """Available personality types for critique"""

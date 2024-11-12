@@ -10,10 +10,10 @@ import weave
 if __name__ == "__main__" and __package__ is None:
     __package__ = "researcher"
 
-from .agent import AgentState
-from .console import Console
-from .config import agent
-from .tools import setup_retriever, find_manuscript, read_from_file, count_words, request_user_input
+from researcher.state import AgentState
+from researcher.console import Console
+from researcher.config import agent
+from researcher.tools import setup_retriever, find_manuscript, read_from_file, count_words, request_user_input
 
 
 @weave.op
