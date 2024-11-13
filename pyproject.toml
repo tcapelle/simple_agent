@@ -1,16 +1,36 @@
-[tool.poetry]
+[build-system]
+requires = ["setuptools>=61.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
 name = "researcher"
 version = "0.1.0"
 description = "AI Research Assistant"
-authors = ["Your Name <your.email@example.com>"]
+authors = [
+    {name = "Thomas Capelle", email = "thomas@wandb.com"}
+]
+requires-python = ">=3.11"
+dependencies = [
+    "openai>=1.0.0",
+    "weave>=0.1.0",
+    "rich>=13.0.0",
+]
+readme = "README.md"
+license = {text = "MIT"}
+keywords = ["ai", "research", "assistant"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+]
 
-[tool.poetry.dependencies]
-python = "^3.9"
-openai = "^1.0.0"
-chromadb = "^0.4.0"
-weave = "^0.1.0"
-rich = "^13.0.0"
+[project.scripts]
+researcher = "researcher.main:main"
+researcher.prepare = "researcher.preprocess:main"
 
-[build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
+
+[tool.setuptools]
+packages = ["researcher"]
+
+[tool.setuptools.package-data]
+researcher = ["*.json", "*.yaml", "*.txt"]
