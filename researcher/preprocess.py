@@ -24,6 +24,8 @@ class PreprocessingArgs:
     output_file: Path = sp.field(default=None, help="Output JSONL file path. Defaults to 'processed_documents.jsonl' in data_dir")
     chunk_size: int = sp.field(default=512, help="Target size of each chunk in characters")
     max_workers: int = sp.field(default=6, help="Maximum number of worker processes. Defaults to CPU count")
+    max_tokens_len: int = sp.field(default=100000, help="Maximum number of tokens allowed per document")
+    skipped_docs_file: Path = sp.field(default=None, help="Output file for skipped documents. Defaults to 'skipped_documents.jsonl' in data_dir")
 
 def generate_chunks(doc_id: str, document_content: str, chunk_size: int = 2048) -> List[Dict]:
     """
@@ -222,13 +224,14 @@ def process_file(file_path: Union[str, Path]) -> Dict[str, Union[str, List[Dict[
     
     return result
 
-def batch_process_files(file_paths: List[Union[str, Path]], max_workers: int = None) -> List[Dict]:
+def batch_process_files(file_paths: List[Union[str, Path]], max_workers: int = None, max_tokens_len: int = 100000) -> List[Dict]:
     """
     Process multiple files in parallel.
     
     Args:
         file_paths: List of file paths to process
         max_workers: Maximum number of worker processes (defaults to CPU count)
+        max_tokens_len: Maximum number of tokens allowed per document
         
     Returns:
         List of dictionaries containing processed file data
@@ -254,7 +257,10 @@ def batch_process_files(file_paths: List[Union[str, Path]], max_workers: int = N
         
         with Pool(processes=max_workers) as pool:
             for result in pool.imap(process_file, file_paths):
-                results.append(result)
+                if result['total_tokens'] <= max_tokens_len:
+                    results.append(result)
+                else:
+                    console.print(f"[yellow]Skipping {result['original_doc_name']} - exceeds token limit ({result['total_tokens']:,} tokens)")
                 progress.advance(task)
     
     return results
@@ -356,7 +362,11 @@ if __name__ == "__main__":
     console.print(f"Found {len(pdf_files)} PDF files in {args.data_dir}")
     
     # Process all files with specified chunk size and worker count
-    processed_files = batch_process_files(pdf_files, max_workers=args.max_workers)
+    processed_files = batch_process_files(
+        pdf_files, 
+        max_workers=args.max_workers,
+        max_tokens_len=args.max_tokens_len
+    )
     
     # Save to JSONL
     save_to_jsonl(processed_files, args.output_file)

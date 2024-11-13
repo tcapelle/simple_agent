@@ -19,7 +19,7 @@ class Agent(weave.Object):
     system_message: str
     tools: List[Any] = Field(default_factory=list)
 
-    @weave.op()
+    @weave.op
     def step(self, state: AgentState) -> AgentState:
         """Run a step of the agent."""
         Console.step_start("agent", "green")
@@ -67,7 +67,7 @@ class Agent(weave.Object):
 
         return AgentState(history=state.history + new_messages)
 
-    @weave.op()
+    @weave.op
     def run(self, state: AgentState):
         """Run the agent until user intervention is needed."""
         state = self.step(state)

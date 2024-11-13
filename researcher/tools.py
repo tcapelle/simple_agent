@@ -1,13 +1,16 @@
 import json
 import os
+import sys
 from enum import Enum
 from datetime import datetime
 from typing import Optional
+from pathlib import Path
 
 import openai
 import weave
 
-# from .rag import DenseRetriever
+from researcher.config import DEFAULT_MODEL
+from researcher.rag import ContextualVectorDB
 
 LENGTH_LIMIT = 10000
 WORKDIR = "workdir"  # Default workspace directory
@@ -51,11 +54,19 @@ def get_manuscript_backup_path():
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     return os.path.join(base_dir, f"manuscript_{timestamp}.txt")
 
-def setup_retriever(folder):
+def setup_retriever(db_path: Path):
     """Initialize the global retriever instance"""
     global retriever
     ensure_workdir()
-    # retriever = DenseRetriever()
+    if not db_path.exists():
+        print(f"No database found at: {db_path}")
+        print("\nTo create a new database, please run:")
+        print("    researcher.prepare")
+        print("\nThis will process your documents in `my_data` and create the necessary database.")
+        sys.exit(1)
+    print("Found existing database!")
+    print(f"📚 Location: {db_path}")
+    retriever = ContextualVectorDB.load_db(db_path=db_path)
 
 class Personality(str, Enum):
     """Available personality types for critique"""
@@ -68,11 +79,12 @@ def count_words(text: str) -> int:
     """Count the number of words in a text."""
     return len(text.split())
 
-@weave.op()
-def critique_content(personality: Personality = Personality.PHD_ADVISOR) -> str:
+@weave.op
+def critique_content(question: str, personality: Personality = Personality.PHD_ADVISOR) -> str:
     """Get critique for the current manuscript using specified personality.
     
     Args:
+        question: Question or topic to explore in the critique
         personality: Personality to use for critique (default: phd_advisor)
     """
     manuscript_path, _ = find_manuscript()
@@ -82,14 +94,14 @@ def critique_content(personality: Personality = Personality.PHD_ADVISOR) -> str:
     except FileNotFoundError:
         return f"No manuscript found at {manuscript_path}. Please create one first."
     print(personality)
-    critique = _critique_text(text, personality)
+    critique = _critique_text(question, text, personality)
     
     # Add suggestion to proceed with revisions
     return (f"{critique}\n\n"
             f"I have provided the critique above. Implement the suggested changes and save the manuscript.")
 
 @weave.op
-def _critique_text(text: str, personality: str) -> str:
+def _critique_text(question: str, text: str, personality: str) -> str:
     """Provide feedback on a given text based on the selected personality using LLM."""
     prompt_dir = os.path.join(os.path.dirname(__file__), 'prompts')
     prompt_path = os.path.join(prompt_dir, f"{personality}.txt")
@@ -98,19 +110,20 @@ def _critique_text(text: str, personality: str) -> str:
 
     client = openai.OpenAI()
     response = client.chat.completions.create(
-        model="gpt-4",
+        model=DEFAULT_MODEL,
         messages=[
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": text}
+            {"role": "user", "content": f"# Question:\n\n{question}\n\n## Current manuscript:\n\n{text}"}
         ]
     )
 
     return response.choices[0].message.content
 
 
-@weave.op()
-def retrieve_documents(query: str, k: int = 5) -> str:
-    """Retrieve relevant documents based on the query.
+@weave.op
+def retrieve_relevant_documents(query: str, k: int = 5) -> str:
+    """Retrieve relevant documents based on the query. The documents
+    are mostly in english so make sure to query them in english.
     
     Args:
         query: Search query
@@ -121,14 +134,15 @@ def retrieve_documents(query: str, k: int = 5) -> str:
         raise ValueError("Retriever not initialized. Call setup_retriever first.")
     
     results = retriever.search(query=query, k=k)
-    
     response = f"I found {len(results)} relevant documents:\n\n"
     response += "\n\n".join(
-        f"From {r['source']}:\n{r['text']}" for r in results
+        f"Document ID: {r['metadata']['doc_id']}\n{r['metadata']['original_content']}" for r in results
     )
+    print(f"I found {len(results)} relevant documents")
+    print(response)
     return response
 
-@weave.op()
+@weave.op
 def list_files(directory: str) -> str:
     """List names of all files in a directory.
 
@@ -144,7 +158,7 @@ def list_files(directory: str) -> str:
         result += "\n... (truncated)"
     return result
 
-@weave.op()
+@weave.op
 def write_to_file(path: str, content: str) -> str:
     """Write text to a file at the given path.
 
@@ -169,7 +183,7 @@ def write_to_file(path: str, content: str) -> str:
         f.write(content)
     return f"File written successfully to {path}" + (" (backup created)" if path == manuscript_path else "")
 
-@weave.op()
+@weave.op
 def read_from_file(path: str) -> str:
     """Read text from a file at the given path.
 
@@ -187,15 +201,15 @@ def read_from_file(path: str) -> str:
         return result
 
 
-@weave.op()
-def request_user_input(prompt: str = "Please provide your input") -> str:
-    """Request input from the user.
+# @weave.op
+# def request_user_input(prompt: str = "Please provide your input") -> str:
+#     """Request input from the user.
     
-    Args:
-        prompt: The prompt to show to the user
+#     Args:
+#         prompt: The prompt to show to the user
         
-    Returns:
-        The user's input
-    """
-    print(f"\n{prompt}")
-    return input("User input: ")
+#     Returns:
+#         The user's input
+#     """
+#     print(f"\n{prompt}")
+#     return input("User input: ")

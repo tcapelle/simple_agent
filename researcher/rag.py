@@ -3,7 +3,6 @@ import pickle
 import json
 import numpy as np
 import openai
-import anthropic
 from typing import List, Dict, Any
 from tqdm.asyncio import tqdm_asyncio
 import threading
@@ -51,33 +50,36 @@ class RAGArgs:
         default=False,
         help="Debug mode. Only process the first 2 documents"
     )
-    anthropic_api_key: str = sp.field(
-        default=None, 
-        help="Anthropic API key. Defaults to ANTHROPIC_API_KEY environment variable"
-    )
-    claude_model: str = sp.field(
-        default="claude-3-5-haiku-latest",
-        help="Anthropic Claude model to use for context generation"
-    )
     weave_project: str = sp.field(
         default="researcher",
         help="Weave project name"
     )
 
 class ContextualVectorDB:
-    def __init__(self, args: RAGArgs):
-        if args.openai_api_key is None:
-            args.openai_api_key = os.getenv("OPENAI_API_KEY")
-        if args.anthropic_api_key is None:
-            args.anthropic_api_key = os.getenv("ANTHROPIC_API_KEY")
+    def __init__(self, 
+                 db_path: Path = Path("./my_data"),
+                 openai_api_key: str = None,
+                 model: str = "gpt-4o",
+                 embedding_model: str = "text-embedding-3-small",
+                 temperature: float = 0.0,
+                 max_tokens: int = 1000,
+                 **kwargs):
+        if openai_api_key is None:
+            openai_api_key = os.getenv("OPENAI_API_KEY")
         
-        self.client = openai.AsyncOpenAI(api_key=args.openai_api_key)
-        self.anthropic_client = anthropic.AsyncAnthropic(api_key=args.anthropic_api_key)
+        self.client = openai.AsyncOpenAI(api_key=openai_api_key)
         self.embeddings = []
         self.metadata = []
         self.query_cache = {}
-        self.db_path = args.db_path / "contextual_vector_db.pkl"
-        self.args = args
+        self.db_path = db_path / "contextual_vector_db.pkl"
+        
+        # Store configuration
+        self.config = {
+            'model': model,
+            'embedding_model': embedding_model,
+            'temperature': temperature,
+            'max_tokens': max_tokens
+        }
 
         self.token_counts = {
             'input': 0,
@@ -87,55 +89,40 @@ class ContextualVectorDB:
         }
         self.token_lock = threading.Lock()
 
-    @weave.op()
+    @weave.op
     async def situate_context(self, doc: str, chunk: str) -> tuple[str, Any]:
-        DOCUMENT_CONTEXT_PROMPT = """
-        <document>
-        {doc_content}
-        </document>
-        """
+        SYSTEM_PROMPT = """You will be given a document and a chunk from that document. Your task is to provide a short succinct context to situate this chunk within the overall document for the purposes of improving search retrieval of the chunk. Answer only with the succinct context and nothing else."""
+        
+        USER_PROMPT = f"""
+        Document:
+        {doc}
 
-        CHUNK_CONTEXT_PROMPT = """
-        Here is the chunk we want to situate within the whole document
-        <chunk>
-        {chunk_content}
-        </chunk>
-
-        Please give a short succinct context to situate this chunk within the overall document for the purposes of improving search retrieval of the chunk.
-        Answer only with the succinct context and nothing else.
+        Chunk to situate:
+        {chunk}
         """
 
         try:
-            response = await self.anthropic_client.beta.prompt_caching.messages.create(
-                model=self.args.claude_model,
-                max_tokens=self.args.max_tokens,
-                temperature=self.args.temperature,
+            response = await self.client.chat.completions.create(
+                model=self.config['model'],
                 messages=[
-                    {
-                        "role": "user", 
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": DOCUMENT_CONTEXT_PROMPT.format(doc_content=doc),
-                                "cache_control": {"type": "ephemeral"}
-                            },
-                            {
-                                "type": "text",
-                                "text": CHUNK_CONTEXT_PROMPT.format(chunk_content=chunk),
-                            },
-                        ]
-                    },
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": USER_PROMPT}
                 ],
-                extra_headers={"anthropic-beta": "prompt-caching-2024-07-31"}
+                max_tokens=self.config['max_tokens'],
+                temperature=self.config['temperature']
             )
             
             with self.token_lock:
-                self.token_counts['input'] += response.usage.input_tokens
-                self.token_counts['output'] += response.usage.output_tokens
-                self.token_counts['cache_read'] += response.usage.cache_read_input_tokens
-                self.token_counts['cache_creation'] += response.usage.cache_creation_input_tokens
-            
-            return response.content[0].text, response.usage
+                # Check if there are cached tokens in the usage details
+                cached_tokens = response.usage.prompt_tokens_details.cached_tokens
+                
+                # Only count non-cached tokens as input tokens
+                self.token_counts['input'] += response.usage.prompt_tokens - cached_tokens
+                self.token_counts['output'] += response.usage.completion_tokens
+                # Track cached tokens separately
+                self.token_counts['cache_read'] += cached_tokens
+                
+            return response.choices[0].message.content, response.usage
         except Exception as e:
             console.print(f"[red]Error in situate_context: {str(e)}")
             raise
@@ -145,9 +132,8 @@ class ContextualVectorDB:
             print("Vector database is already loaded. Skipping data loading.")
             return
         if os.path.exists(self.db_path):
-            print("Loading vector database from disk.")
-            self.load_db()
-            return
+            print(f"Loading vector database from disk: {self.db_path}")
+            return self.load_db(self.db_path)
 
         texts_to_embed = []
         metadata = []
@@ -206,7 +192,7 @@ class ContextualVectorDB:
             for i in range(0, len(texts), batch_size):
                 batch = texts[i : i + batch_size]
                 response = await self.client.embeddings.create(
-                    model=self.args.embedding_model,
+                    model=self.config['embedding_model'],
                     input=batch
                 )
                 batch_embeddings = [item.embedding for item in response.data]
@@ -218,14 +204,23 @@ class ContextualVectorDB:
             console.print(f"[red]Error in _embed_and_store: {str(e)}")
             raise
 
+    def search(self, query: str, k: int = 20) -> List[Dict[str, Any]]:
+        """Synchronous version of search"""
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            return loop.run_until_complete(self.asearch(query, k))
+        finally:
+            loop.close()
+
     @weave.op
-    async def search(self, query: str, k: int = 20) -> List[Dict[str, Any]]:
+    async def asearch(self, query: str, k: int = 20) -> List[Dict[str, Any]]:
         if query in self.query_cache:
             query_embedding = self.query_cache[query]
         else:
             # Replace Voyage query embedding with OpenAI
             response = await self.client.embeddings.create(
-                model=self.args.embedding_model,
+                model=self.config['embedding_model'],
                 input=[query]
             )
             query_embedding = response.data[0].embedding
@@ -251,19 +246,40 @@ class ContextualVectorDB:
             "embeddings": self.embeddings,
             "metadata": self.metadata,
             "query_cache": json.dumps(self.query_cache),
+            "config": self.config,
         }
         os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
         with open(self.db_path, "wb") as file:
             pickle.dump(data, file)
 
-    def load_db(self):
-        if not os.path.exists(self.db_path):
+    @classmethod
+    def load_db(cls, db_path: Path) -> 'ContextualVectorDB':
+        if not os.path.exists(db_path):
             raise ValueError("Vector database file not found. Use load_data to create a new database.")
-        with open(self.db_path, "rb") as file:
+        
+        with open(db_path, "rb") as file:
             data = pickle.load(file)
-        self.embeddings = data["embeddings"]
-        self.metadata = data["metadata"]
-        self.query_cache = json.loads(data["query_cache"])
+        
+        # Use config from file if available, otherwise use default values
+        default_config = {
+            'model': "gpt-4o",
+            'embedding_model': "text-embedding-3-small",
+            'temperature': 0.0,
+            'max_tokens': 1000
+        }
+        config = data.get("config", default_config)
+        
+        # Create instance with config
+        instance = cls(
+            db_path=Path(os.path.dirname(db_path)),
+            **config
+        )
+        
+        instance.embeddings = data["embeddings"]
+        instance.metadata = data["metadata"]
+        instance.query_cache = json.loads(data["query_cache"])
+        
+        return instance
 
 
 if __name__ == "__main__":
@@ -282,7 +298,14 @@ if __name__ == "__main__":
                         break
                     transformed_dataset.append(json.loads(line))
             
-            db = ContextualVectorDB(args)
+            db = ContextualVectorDB(
+                db_path=args.db_path,
+                openai_api_key=args.openai_api_key,
+                model=args.model,
+                embedding_model=args.embedding_model,
+                temperature=args.temperature,
+                max_tokens=args.max_tokens
+            )
             
             # Test single context generation
             console.print("[green]Testing single context generation...")
@@ -294,17 +317,18 @@ if __name__ == "__main__":
             
             # Load all data
             console.print("[green]Loading full dataset...")
-            await db.load_data(transformed_dataset, parallel_requests=args.parallel_requests)
-            
-            # Test search functionality
-            console.print("[green]Testing search functionality...")
-            sample_query = "test query"  # Replace with an actual test query
-            results = await db.search(sample_query, k=3)
-            console.print(f"Sample search results: {results}")
-            
+            db = await db.load_data(transformed_dataset, parallel_requests=args.parallel_requests)
+            return db
         except Exception as e:
             console.print(f"[red]Error in main process: {str(e)}")
             raise
 
     # Run the async main function
-    asyncio.run(process_dataset())
+    db = asyncio.run(process_dataset())
+
+    # Test search functionality
+    console.print("[green]Testing search functionality...")
+    sample_query = "What is the permafrost Thaw?"  # Replace with an actual test query
+    results = db.search(sample_query, k=3)
+    console.print(f"Sample search results: {results}")
+            
