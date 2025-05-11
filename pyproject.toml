@@ -19,6 +19,7 @@ dependencies = [
     "mistralai[gcp]>=1.0.0",
     "simple-parsing>=0.1.7",
     "pypdf2>=3.0.1",
+    "mistralai>1.0"
 ]
 readme = "README.md"
 license = {text = "MIT"}
