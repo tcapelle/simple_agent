@@ -6,9 +6,12 @@ from datetime import datetime
 from pathlib import Path
 
 import weave
-
+from researcher.console import Console
 from researcher.config import DEFAULT_MODEL
 from researcher.rag import ContextualVectorDB
+
+from mistralai import Mistral
+
 
 LENGTH_LIMIT = 10000
 WORKDIR = "workdir"  # Default workspace directory
@@ -111,7 +114,6 @@ def _critique_text(question: str, text: str, personality: str) -> str:
     with open(prompt_path, 'r') as f:
         system_prompt = f.read()
 
-    from mistralai import Mistral
     client = Mistral(os.getenv("MISTRAL_API_KEY"))
     response = client.chat.complete(
         model=DEFAULT_MODEL,
@@ -177,13 +179,13 @@ def write_to_file(path: str, content: str) -> str:
     manuscript_path, _ = find_manuscript()
     if os.path.exists(path) and path == manuscript_path:
         backup_path = get_manuscript_backup_path()
-        with open(path, 'r') as src, open(backup_path, 'w') as dst:
+        with open(path, 'r', encoding='utf-8') as src, open(backup_path, 'w', encoding='utf-8') as dst:
             dst.write(src.read())
     
     # Ensure directory exists
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
     
-    with open(path, "w") as f:
+    with open(path, "w", encoding='utf-8') as f:
         f.write(content)
     return f"File written successfully to {path}" + (" (backup created)" if path == manuscript_path else "")
 
@@ -197,7 +199,7 @@ def read_from_file(path: str) -> str:
     Returns:
         The content of the file.
     """
-    with open(path, "r") as f:
+    with open(path, "r", encoding='utf-8') as f:
         result = f.read()
         if len(result) > LENGTH_LIMIT:
             result = result[:LENGTH_LIMIT]
@@ -213,3 +215,17 @@ def think(thought: str) -> str:
         thought: A thought to think about.
     """
     return thought
+
+
+@weave.op
+def get_user_input(prompt: str = "User input: ") -> str:
+    """When you need to get input from the user, use this tool.
+    
+    Args:
+        prompt: The prompt to display to the user.
+
+    Returns:
+        The user's input.
+    """
+    Console.step_start("user_input", "purple")
+    return input(prompt)

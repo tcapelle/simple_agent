@@ -31,10 +31,10 @@ os.environ["WEAVE_PRINT_CALL_LINK"] = "0"
 
 from researcher.tools import (
     list_files, write_to_file, read_from_file,
-    retrieve_relevant_documents, critique_content, think
+    retrieve_relevant_documents, critique_content, think, get_user_input
 )
 
 DEFAULT_TOOLS = [
     list_files, write_to_file, read_from_file,
-    retrieve_relevant_documents, critique_content, think
+    retrieve_relevant_documents, critique_content, think, get_user_input
 ]
