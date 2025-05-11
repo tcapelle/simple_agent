@@ -313,7 +313,7 @@ def save_to_jsonl(documents: List[Dict], output_path: Union[str, Path]) -> None:
             json_line = json.dumps(doc, ensure_ascii=False)
             f.write(json_line + '\n')
 
-def calculate_token_stats(documents: List[Dict]) -> Dict[str, Union[int, float, str]]:
+def calculate_token_stats(documents: List[Dict], chunk_size: int) -> Dict[str, Union[int, float, str]]:
     """Calculate statistics about token usage across all documents."""
     # Get document stats with filenames
     doc_tokens_with_names = [(doc['total_tokens'], doc['original_doc_name']) for doc in documents]
@@ -337,10 +337,10 @@ def calculate_token_stats(documents: List[Dict]) -> Dict[str, Union[int, float, 
             'total': sum(doc_tokens)
         },
         'chunks': {
-            'min': args.chunk_size,  # Fixed size
-            'max': args.chunk_size,  # Fixed size
-            'avg': args.chunk_size,  # Fixed size
-            'median': args.chunk_size,  # Fixed size
+            'min': chunk_size,  # Fixed size
+            'max': chunk_size,  # Fixed size
+            'avg': chunk_size,  # Fixed size
+            'median': chunk_size,  # Fixed size
             'total': sum(chunk_tokens),
             'count': len(chunk_tokens)
         }
@@ -350,7 +350,7 @@ def truncate_filename(filename: str, max_length: int = 50) -> str:
     """Truncate filename if longer than max_length and add ellipsis."""
     return filename if len(filename) <= max_length else filename[:max_length-3] + "..."
 
-if __name__ == "__main__":
+def main():
     args = sp.parse(PreprocessingArgs)
 
     # Set default output file if not provided
@@ -373,7 +373,7 @@ if __name__ == "__main__":
     console.print(f"\n[green]Saved {len(processed_files)} documents to {args.output_file}")
     
     # Calculate token statistics
-    token_stats = calculate_token_stats(processed_files)
+    token_stats = calculate_token_stats(processed_files, args.chunk_size)
     
     console.rule("[bold blue]Token Statistics")
     
@@ -427,7 +427,7 @@ if __name__ == "__main__":
     
     # Show details of first file as example
     processed_file = processed_files[0]
-    console.rule("[bold blue]Document Details")
+    console.rule("[bold blue]First Document Details")
     console.print(f"Doc ID: {processed_file['doc_id']}")
     console.print(f"Original Name: {processed_file['original_doc_name']}")
     console.print(f"UUID: {processed_file['original_uuid']}")
@@ -440,3 +440,6 @@ if __name__ == "__main__":
     for chunk in processed_file['chunks'][:2]:
         console.print(chunk)
         console.print("---")
+
+if __name__ == "__main__":
+    main()

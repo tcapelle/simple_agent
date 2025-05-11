@@ -8,14 +8,12 @@ from typing import Optional, Tuple
 from rich import print
 import weave
 
+from researcher.agent import Agent
 from researcher.state import AgentState
-from researcher.rag import ContextualVectorDB
 from researcher.console import Console
-from researcher.config import agent
+from researcher.config import SYSTEM_MESSAGE, DEFAULT_MODEL, DEFAULT_TOOLS
 from researcher.tools import setup_retriever, find_manuscript, read_from_file, count_words
 
-
-# Estoy trabajando en mi capitulo de introduccion, quiero mejorarlo, incluir citas y referencias. Hazlo entretenido y motivanmte para que den ganas de leer mi tesis 
 
 @weave.op
 def get_user_input(prompt: str = "User input: "):
@@ -25,12 +23,9 @@ def get_user_input(prompt: str = "User input: "):
 @weave.op
 def user_input_step(state: AgentState) -> AgentState:
     Console.step_start("user_input", "purple")
-    ref = weave.obj_ref(state)
-    if ref:
-        print("state ref:", ref.uri())
     user_input = get_user_input()
     return AgentState(
-        history=state.history
+        messages=state.messages
         + [
             {
                 "role": "user",
@@ -39,20 +34,17 @@ def user_input_step(state: AgentState) -> AgentState:
         ],
     )
 
-
 @weave.op
-def session(agent_state: AgentState):
+def session(agent: Agent, agent_state: AgentState):
     try:
         while True:
             agent_state = agent.run(agent_state)
             agent_state = user_input_step(agent_state)
             # Check for exit commands in last message
-            last_message = agent_state.history[-1]["content"].lower()
+            last_message = agent_state.messages[-1]["content"].lower()
             if last_message in ["exit", "quit", "bye"]:
                 print("\nEnding session at user request.")
-                break
-            
-                
+                break    
     except KeyboardInterrupt:
         print("\nSession interrupted by user.")
     except Exception as e:
@@ -97,7 +89,11 @@ def create_initial_state(existing_content: Optional[str] = None, word_count: Opt
     
     if existing_content:
         return AgentState(
-            history=[
+            messages=[
+                {
+                    "role": "system",
+                    "content": SYSTEM_MESSAGE,
+                },
                 {
                     "role": "assistant",
                     "content": f"Current manuscript ({word_count:,} words):\n\n{existing_content}"
@@ -110,7 +106,11 @@ def create_initial_state(existing_content: Optional[str] = None, word_count: Opt
         )
     
     return AgentState(
-        history=[
+        messages=[
+            {
+                "role": "system",
+                "content": SYSTEM_MESSAGE,
+            },
             {
                 "role": "user",
                 "content": initial_prompt,
@@ -134,6 +134,18 @@ def main():
             default="my_data/contextual_vector_db.pkl",
             help="Path to the database file"
         )
+        model_name: str = sp.field(
+            default=DEFAULT_MODEL,
+            help="Model name"
+        )
+        system_message: str = sp.field(
+            default=SYSTEM_MESSAGE,
+            help="System message"
+        )
+        max_tokens: int = sp.field(
+            default=1000,
+            help="Maximum tokens for context generation"
+        )
 
     args = sp.parse(MainArgs)
 
@@ -142,16 +154,15 @@ def main():
     Console.welcome()
     setup_retriever(args.data_path / "contextual_vector_db.pkl")
 
-    # try:
-    #     if args.state:
-    #         state = weave.ref(args.state).get()
-    #     else:
-    #         raise weave.trace_server.sqlite_trace_server.NotFoundError
-    # except weave.trace_server.sqlite_trace_server.NotFoundError:
     content, word_count = handle_existing_manuscript()
     state = create_initial_state(content, word_count)
-
-    session(state)
+    agent = Agent(
+        model_name=args.model_name,
+        temperature=0.7,
+        tools=DEFAULT_TOOLS,
+        max_tokens=args.max_tokens
+    )
+    session(agent, state)
 
 
 if __name__ == "__main__":

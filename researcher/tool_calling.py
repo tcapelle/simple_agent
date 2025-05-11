@@ -2,8 +2,6 @@ import inspect
 import json
 from typing import Callable, get_type_hints, Any
 
-from openai.types.chat import ChatCompletionMessageToolCall, ChatCompletionToolParam
-
 from .console import Console
 
 
@@ -83,10 +81,19 @@ def generate_json_schema(func: Callable) -> dict:
 
     return schema
 
-
-def chat_call_tool_params(tools: list[Callable]) -> list[ChatCompletionToolParam]:
-    chat_tools = [generate_json_schema(tool) for tool in tools]
-    return [ChatCompletionToolParam(**tool) for tool in chat_tools]
+def function_tool(func: Callable) -> Callable:
+    """Attaches a tool schema to the function and marks it as a tool.
+    Call this *after* defining your function: my_func = function_tool(my_func)
+    """
+    try:
+        func.tool_schema = generate_json_schema(func)
+        func.is_tool = True # Mark it as a tool
+    except Exception as e:
+        print(f"Error processing tool {func.__name__}: {e}")
+        # Optionally raise or mark as failed
+        func.tool_schema = None
+        func.is_tool = False
+    return func
 
 
 def get_tool(tools: list[Callable], name: str) -> Callable:
@@ -97,7 +104,7 @@ def get_tool(tools: list[Callable], name: str) -> Callable:
 
 
 def perform_tool_calls(
-    tools: list[Callable], tool_calls: list[ChatCompletionMessageToolCall]
+    tools: list[Callable], tool_calls: list
 ) -> list[dict]:
     messages = []
     for tool_call in tool_calls:

@@ -1,62 +1,53 @@
-from typing import Any, List, Optional
+import os
+from typing import Any, List
 from pydantic import Field
-from openai import OpenAI
 from openai._types import NotGiven
-from openai.types.chat import (
-    ChatCompletionMessageParam,
-)
+
+from mistralai import Mistral
 
 import weave
-from weave.flow.chat_util import OpenAIStream
 
+from .mistral_helper import MistralAIStream
 from .console import Console
-from .tool_calling import chat_call_tool_params, perform_tool_calls
+from .tool_calling import function_tool, perform_tool_calls
 from .state import AgentState
+
+client = Mistral(os.getenv("MISTRAL_API_KEY"))
 
 class Agent(weave.Object):
     model_name: str
     temperature: float
-    system_message: str
     tools: List[Any] = Field(default_factory=list)
+    max_tokens: int = 1000
+    def model_post_init(self, __context: Any) -> None:
+        if self.tools:
+            self.tools = [function_tool(tool) for tool in self.tools]
 
     @weave.op
     def step(self, state: AgentState) -> AgentState:
         """Run a step of the agent."""
         Console.step_start("agent", "green")
-        ref = weave.obj_ref(state)
-        if ref:
-            print("state ref:", ref.uri())
+        roles = [message["role"] for message in state.messages]
+        print(f"Agent state roles: {roles}")
 
-        messages: List[ChatCompletionMessageParam] = [
-            {"role": "system", "content": self.system_message},
-        ]
-        messages += state.history
-
-        # make type checkers happy by passing NotGiven instead of None
-        tools = NotGiven()
-        if self.tools:
-            tools = chat_call_tool_params(self.tools)
+        messages = state.messages
 
         Console.chat_response_start()
-
-        client = OpenAI()
-        stream = client.chat.completions.create(
+        stream = client.chat.stream(
             model=self.model_name,
-            temperature=self.temperature,
             messages=messages,
-            tools=tools,
-            stream=True,
-            timeout=15,
+            tools=[t.tool_schema for t in self.tools],
+            max_tokens=self.max_tokens,
         )
-        wrapped_stream = OpenAIStream(stream)
+        wrapped_stream = MistralAIStream(stream)
         for chunk in wrapped_stream:
-            if chunk.choices[0].delta.content:
-                Console.chat_message_content_delta(chunk.choices[0].delta.content)
+            if chunk.data.choices[0].delta.content:
+                Console.chat_message_content_delta(chunk.data.choices[0].delta.content)
 
         response = wrapped_stream.final_response()
         response_message = response.choices[0].message
         if response_message.content:
-            Console.chat_response_complete(response_message.content)
+            Console.chat_response_complete()
 
         new_messages = []
         new_messages.append(response_message.model_dump(exclude_none=True))
@@ -65,10 +56,11 @@ class Agent(weave.Object):
                 perform_tool_calls(self.tools, response_message.tool_calls)
             )
 
-        return AgentState(history=state.history + new_messages)
+        return AgentState(messages=state.messages + new_messages)
 
     @weave.op
     def run(self, state: AgentState):
         """Run the agent until user intervention is needed."""
-        state = self.step(state)
+        while state.messages[-1]["role"] != "assistant":
+            state = self.step(state)
         return state

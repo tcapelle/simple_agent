@@ -23,7 +23,7 @@ class Console:
         console.print(message_content_delta, end="")
 
     @staticmethod
-    def chat_response_complete(agent_response: str) -> None:
+    def chat_response_complete() -> None:
         console.print("\n")
 
     @staticmethod

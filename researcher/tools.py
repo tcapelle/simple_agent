@@ -3,10 +3,8 @@ import os
 import sys
 from enum import Enum
 from datetime import datetime
-from typing import Optional
 from pathlib import Path
 
-import openai
 import weave
 
 from researcher.config import DEFAULT_MODEL
@@ -104,12 +102,18 @@ def critique_content(question: str, personality: Personality = Personality.PHD_A
 def _critique_text(question: str, text: str, personality: str) -> str:
     """Provide feedback on a given text based on the selected personality using LLM."""
     prompt_dir = os.path.join(os.path.dirname(__file__), 'prompts')
-    prompt_path = os.path.join(prompt_dir, f"{personality}.txt")
+    # Determine the correct filename from Personality enum
+    if isinstance(personality, Personality):
+        personality_name = personality.value
+    else:
+        personality_name = str(personality)
+    prompt_path = os.path.join(prompt_dir, f"{personality_name}.txt")
     with open(prompt_path, 'r') as f:
         system_prompt = f.read()
 
-    client = openai.OpenAI()
-    response = client.chat.completions.create(
+    from mistralai import Mistral
+    client = Mistral(os.getenv("MISTRAL_API_KEY"))
+    response = client.chat.complete(
         model=DEFAULT_MODEL,
         messages=[
             {"role": "system", "content": system_prompt},
@@ -201,15 +205,11 @@ def read_from_file(path: str) -> str:
         return result
 
 
-# @weave.op
-# def request_user_input(prompt: str = "Please provide your input") -> str:
-#     """Request input from the user.
-    
-#     Args:
-#         prompt: The prompt to show to the user
-        
-#     Returns:
-#         The user's input
-#     """
-#     print(f"\n{prompt}")
-#     return input("User input: ")
+@weave.op
+def think(thought: str) -> str:
+    """Use the tool to think about something. It will not obtain new information or change the database, but just append the thought to the log. Use it when complex reasoning or some cache memory is needed.
+
+    Args:
+        thought: A thought to think about.
+    """
+    return thought

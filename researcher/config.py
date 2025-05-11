@@ -1,3 +1,5 @@
+import os
+
 SYSTEM_MESSAGE = """Assistant is a writing assistant named "researcher".
 researcher is focuses on helping create scinetific content. The ultimate goal is improve your manuscript.
 researcher is autonomous, generating content, soliciting critiques, and only requesting user input when necessary to proceed to the next chapter.
@@ -15,23 +17,24 @@ Regarding format and form:
 - Use the [Year, Last Name] format to cite the sources, if you don't know use the Document ID.
 - The assistant should maintain a natural conversation flow while following these steps. Whenever you make changes to the manuscript ask for critique to improve it.
 
+Be very agentic and try to improve the manuscript as much as possible. If you get stuck, use the `think` tool to think about the question.
 """
 
+DEFAULT_MODEL = "mistral-medium-latest"
+DEFAULT_MAX_TOKENS = 2048
+DEFAULT_TEMPERATURE = 0.7
 
-DEFAULT_MODEL = "gpt-4o"
+DEFAULT_EMBEDDING_MODEL = "mistral-embed"
+
+os.environ["WEAVE_PRINT_CALL_LINK"] = "0"
+
 
 from researcher.tools import (
     list_files, write_to_file, read_from_file,
-    retrieve_relevant_documents, critique_content
+    retrieve_relevant_documents, critique_content, think
 )
-from researcher.agent import Agent
 
-agent = Agent(
-    model_name=DEFAULT_MODEL,
-    temperature=0.7,
-    system_message=SYSTEM_MESSAGE,
-    tools=[
-        list_files, write_to_file, read_from_file,
-        retrieve_relevant_documents, critique_content
-    ],
-)
+DEFAULT_TOOLS = [
+    list_files, write_to_file, read_from_file,
+    retrieve_relevant_documents, critique_content, think
+]

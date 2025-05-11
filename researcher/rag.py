@@ -2,7 +2,6 @@ import os
 import pickle
 import json
 import numpy as np
-import openai
 from typing import List, Dict, Any
 from tqdm.asyncio import tqdm_asyncio
 import threading
@@ -10,6 +9,7 @@ from pathlib import Path
 from dataclasses import dataclass
 import simple_parsing as sp
 import asyncio
+from mistralai import Mistral
 
 import weave
 
@@ -22,16 +22,12 @@ class RAGArgs:
         default=Path("./my_data"), 
         help="Path to store/load the vector database"
     )
-    openai_api_key: str = sp.field(
-        default=None, 
-        help="OpenAI API key. Defaults to OPENAI_API_KEY environment variable"
-    )
     model: str = sp.field(
-        default="gpt-4o",
-        help="OpenAI model to use for context generation"
+        default="mistral-medium-latest",
+        help="Mistral model to use for context generation"
     )
     embedding_model: str = sp.field(
-        default="text-embedding-3-small",
+        default="mistral-embed",
         help="Model to use for embeddings"
     )
     temperature: float = sp.field(
@@ -58,16 +54,14 @@ class RAGArgs:
 class ContextualVectorDB:
     def __init__(self, 
                  db_path: Path = Path("./my_data"),
-                 openai_api_key: str = None,
                  model: str = "gpt-4o",
-                 embedding_model: str = "text-embedding-3-small",
+                 embedding_model: str = "mistral-embed",
                  temperature: float = 0.0,
                  max_tokens: int = 1000,
                  **kwargs):
-        if openai_api_key is None:
-            openai_api_key = os.getenv("OPENAI_API_KEY")
         
-        self.client = openai.AsyncOpenAI(api_key=openai_api_key)
+        # Initialize Mistral client for embeddings
+        self.mistral_client = Mistral(api_key=os.getenv("MISTRAL_API_KEY"))
         self.embeddings = []
         self.metadata = []
         self.query_cache = {}
@@ -102,7 +96,7 @@ class ContextualVectorDB:
         """
 
         try:
-            response = await self.client.chat.completions.create(
+            response = await self.mistral_client.chat.complete_async(
                 model=self.config['model'],
                 messages=[
                     {"role": "system", "content": SYSTEM_PROMPT},
@@ -113,14 +107,11 @@ class ContextualVectorDB:
             )
             
             with self.token_lock:
-                # Check if there are cached tokens in the usage details
-                cached_tokens = response.usage.prompt_tokens_details.cached_tokens
-                
-                # Only count non-cached tokens as input tokens
-                self.token_counts['input'] += response.usage.prompt_tokens - cached_tokens
-                self.token_counts['output'] += response.usage.completion_tokens
-                # Track cached tokens separately
-                self.token_counts['cache_read'] += cached_tokens
+                # Track token usage from Mistral
+                input_tokens = getattr(response.usage, 'prompt_tokens', 0)
+                output_tokens = getattr(response.usage, 'completion_tokens', 0)
+                self.token_counts['input'] += input_tokens
+                self.token_counts['output'] += output_tokens
                 
             return response.choices[0].message.content, response.usage
         except Exception as e:
@@ -183,7 +174,6 @@ class ContextualVectorDB:
         print(f"Total input token savings from prompt caching: {savings_percentage:.2f}% of all input tokens used were read from cache.")
         print("Tokens read from cache come at a 90 percent discount!")
 
-    #we use voyage AI here for embeddings. Read more here: https://docs.voyageai.com/docs/embeddings
     async def _embed_and_store(self, texts: List[str], data: List[Dict[str, Any]]):
         batch_size = 128
         all_embeddings = []
@@ -191,9 +181,14 @@ class ContextualVectorDB:
         try:
             for i in range(0, len(texts), batch_size):
                 batch = texts[i : i + batch_size]
-                response = await self.client.embeddings.create(
-                    model=self.config['embedding_model'],
-                    input=batch
+                # Use Mistral for batch embeddings
+                loop = asyncio.get_running_loop()
+                response = await loop.run_in_executor(
+                    None,
+                    lambda: self.mistral_client.embeddings.create(
+                        model=self.config['embedding_model'],
+                        inputs=batch
+                    )
                 )
                 batch_embeddings = [item.embedding for item in response.data]
                 all_embeddings.extend(batch_embeddings)
@@ -218,10 +213,14 @@ class ContextualVectorDB:
         if query in self.query_cache:
             query_embedding = self.query_cache[query]
         else:
-            # Replace Voyage query embedding with OpenAI
-            response = await self.client.embeddings.create(
-                model=self.config['embedding_model'],
-                input=[query]
+            # Use Mistral for query embedding
+            loop = asyncio.get_running_loop()
+            response = await loop.run_in_executor(
+                None,
+                lambda: self.mistral_client.embeddings.create(
+                    model=self.config['embedding_model'],
+                    inputs=[query]
+                )
             )
             query_embedding = response.data[0].embedding
             self.query_cache[query] = query_embedding
@@ -262,8 +261,8 @@ class ContextualVectorDB:
         
         # Use config from file if available, otherwise use default values
         default_config = {
-            'model': "gpt-4o",
-            'embedding_model': "text-embedding-3-small",
+            'model': "mistral-medium-latest",
+            'embedding_model': "mistral-embed",
             'temperature': 0.0,
             'max_tokens': 1000
         }
@@ -292,7 +291,7 @@ if __name__ == "__main__":
         try:
             # Load the transformed dataset
             transformed_dataset = []
-            with open('my_data/processed_documents.jsonl', 'r') as f:
+            with open(f'{args.db_path}/processed_documents.jsonl', 'r') as f:
                 for i, line in enumerate(f):
                     if args.debug and i > 1:
                         break
@@ -300,7 +299,6 @@ if __name__ == "__main__":
             
             db = ContextualVectorDB(
                 db_path=args.db_path,
-                openai_api_key=args.openai_api_key,
                 model=args.model,
                 embedding_model=args.embedding_model,
                 temperature=args.temperature,
@@ -328,7 +326,7 @@ if __name__ == "__main__":
 
     # Test search functionality
     console.print("[green]Testing search functionality...")
-    sample_query = "What is the permafrost Thaw?"  # Replace with an actual test query
+    sample_query = "What Unesco places are in Chile?"  # Replace with an actual test query
     results = db.search(sample_query, k=3)
     console.print(f"Sample search results: {results}")
             

@@ -15,6 +15,10 @@ dependencies = [
     "weave>=0.1.0",
     "rich>=13.0.0",
     "litellm>=1.68.0",
+    "ipykernel>=6.29.5",
+    "mistralai[gcp]>=1.0.0",
+    "simple-parsing>=0.1.7",
+    "pypdf2>=3.0.1",
 ]
 readme = "README.md"
 license = {text = "MIT"}
@@ -27,7 +31,7 @@ classifiers = [
 
 [project.scripts]
 researcher = "researcher.main:main"
-prepare = "researcher.preprocess:main"
+researcher_prepare = "researcher.preprocess:main"
 
 
 [tool.setuptools]
