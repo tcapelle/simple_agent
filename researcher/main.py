@@ -12,34 +12,34 @@ from researcher.agent import Agent
 from researcher.state import AgentState
 from researcher.console import Console
 from researcher.config import SYSTEM_MESSAGE, DEFAULT_MODEL, DEFAULT_TOOLS
-from researcher.tools import setup_retriever, find_manuscript, read_from_file, count_words
+from researcher.tools import setup_retriever, find_manuscript, read_from_file, count_words, get_user_input
 
 
-@weave.op
-def get_user_input(prompt: str = "User input: "):
-    return input(prompt)
+# @weave.op
+# def get_user_input(prompt: str = "User input: "):
+#     return input(prompt)
 
 
-@weave.op
-def user_input_step(state: AgentState) -> AgentState:
-    Console.step_start("user_input", "purple")
-    user_input = get_user_input()
-    return AgentState(
-        messages=state.messages
-        + [
-            {
-                "role": "user",
-                "content": user_input,
-            }
-        ],
-    )
+# @weave.op
+# def user_input_step(state: AgentState) -> AgentState:
+#     Console.step_start("user_input", "purple")
+#     user_input = get_user_input()
+#     return AgentState(
+#         messages=state.messages
+#         + [
+#             {
+#                 "role": "user",
+#                 "content": user_input,
+#             }
+#         ],
+#     )
 
 @weave.op
 def session(agent: Agent, agent_state: AgentState):
     try:
         while True:
             agent_state = agent.run(agent_state)
-            agent_state = user_input_step(agent_state)
+            # agent_state = user_input_step(agent_state)
             # Check for exit commands in last message
             last_message = agent_state.messages[-1]["content"].lower()
             if last_message in ["exit", "quit", "bye"]:
