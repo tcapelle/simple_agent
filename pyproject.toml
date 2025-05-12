@@ -14,12 +14,12 @@ dependencies = [
     "openai>=1.0.0",
     "weave>=0.1.0",
     "rich>=13.0.0",
-    "litellm>=1.68.0",
     "ipykernel>=6.29.5",
-    "mistralai[gcp]>=1.0.0",
+    "mistralai[gcp]>1.0.0",
     "simple-parsing>=0.1.7",
     "pypdf2>=3.0.1",
-    "mistralai>1.0"
+    "mistralai>1.0",
+    "tiktoken>=0.9.0",
 ]
 readme = "README.md"
 license = {text = "MIT"}
@@ -31,8 +31,8 @@ classifiers = [
 ]
 
 [project.scripts]
-researcher = "researcher.main:main"
-researcher_prepare = "researcher.preprocess:main"
+"researcher" = "researcher.main:main"
+"researcher.prepare" = "researcher.rag:prepare"
 
 
 [tool.setuptools]

@@ -11,8 +11,8 @@ import weave
 from researcher.agent import Agent
 from researcher.state import AgentState
 from researcher.console import Console
-from researcher.config import SYSTEM_MESSAGE, DEFAULT_MODEL, DEFAULT_TOOLS
-from researcher.tools import setup_retriever, find_manuscript, read_from_file, count_words, get_user_input
+from researcher.config import SYSTEM_MESSAGE, DEFAULT_MODEL
+from researcher.tools import setup_retriever, find_manuscript, read_from_file, count_words, get_user_input, DEFAULT_TOOLS
 
 
 # @weave.op

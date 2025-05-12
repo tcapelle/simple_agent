@@ -13,21 +13,22 @@ from mistralai import Mistral
 
 import weave
 
+from researcher.config import DATA_DIR, DEFAULT_EMBEDDING_MODEL, DEFAULT_MODEL, PARALLEL_REQUESTS, DEFAULT_WEAVE_PROJECT
 from researcher.console import console
 
 @dataclass
 class RAGArgs:
     """Arguments for RAG processing"""
     db_path: Path = sp.field(
-        default=Path("./my_data"), 
+        default=DATA_DIR, 
         help="Path to store/load the vector database"
     )
     model: str = sp.field(
-        default="mistral-medium-latest",
+        default=DEFAULT_MODEL,
         help="Mistral model to use for context generation"
     )
     embedding_model: str = sp.field(
-        default="mistral-embed",
+        default=DEFAULT_EMBEDDING_MODEL,
         help="Model to use for embeddings"
     )
     temperature: float = sp.field(
@@ -39,7 +40,7 @@ class RAGArgs:
         help="Maximum tokens for context generation"
     )
     parallel_requests: int = sp.field(
-        default=5,
+        default=PARALLEL_REQUESTS,
         help="Number of parallel requests for processing"
     )
     debug: bool = sp.field(
@@ -47,7 +48,7 @@ class RAGArgs:
         help="Debug mode. Only process the first 2 documents"
     )
     weave_project: str = sp.field(
-        default="researcher",
+        default=DEFAULT_WEAVE_PROJECT,
         help="Weave project name"
     )
 
@@ -281,7 +282,7 @@ class ContextualVectorDB:
         return instance
 
 
-if __name__ == "__main__":
+def create_db():
     args = sp.parse(RAGArgs)
 
     weave.init(args.weave_project)
@@ -330,3 +331,12 @@ if __name__ == "__main__":
     results = db.search(sample_query, k=3)
     console.print(f"Sample search results: {results}")
             
+
+def prepare():
+    from researcher.preprocess import main
+    main()
+    console.rule("[green]Creating vector database...")
+    create_db()
+
+if __name__ == "__main__":
+    create_db()

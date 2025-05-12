@@ -19,6 +19,7 @@ WORKDIR = "workdir"  # Default workspace directory
 # Global retriever instance
 retriever = None
 
+
 def ensure_workdir():
     """Ensure the workspace directory exists"""
     if not os.path.exists(WORKDIR):
@@ -229,3 +230,8 @@ def get_user_input(prompt: str = "User input: ") -> str:
     """
     Console.step_start("user_input", "purple")
     return input(prompt)
+
+DEFAULT_TOOLS = [
+    list_files, write_to_file, read_from_file,
+    retrieve_relevant_documents, critique_content, think, get_user_input
+]

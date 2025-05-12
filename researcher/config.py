@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 
 SYSTEM_MESSAGE = """Assistant is a writing assistant named "researcher".
 researcher is focuses on helping create scinetific content. The ultimate goal is improve your manuscript.
@@ -20,21 +21,17 @@ Regarding format and form:
 Be very agentic and try to improve the manuscript as much as possible. If you get stuck, use the `think` tool to think about the question.
 """
 
+# Generation parameters
 DEFAULT_MODEL = "mistral-medium-latest"
 DEFAULT_MAX_TOKENS = 2048
 DEFAULT_TEMPERATURE = 0.7
 
+# RAG parameters
+DATA_DIR = Path("./my_data")
+CHUNK_SIZE = 512
 DEFAULT_EMBEDDING_MODEL = "mistral-embed"
+PARALLEL_REQUESTS = 10
 
+# Weave parameters
+DEFAULT_WEAVE_PROJECT = "researcher"
 os.environ["WEAVE_PRINT_CALL_LINK"] = "0"
-
-
-from researcher.tools import (
-    list_files, write_to_file, read_from_file,
-    retrieve_relevant_documents, critique_content, think, get_user_input
-)
-
-DEFAULT_TOOLS = [
-    list_files, write_to_file, read_from_file,
-    retrieve_relevant_documents, critique_content, think, get_user_input
-]
