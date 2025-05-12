@@ -13,13 +13,14 @@ from researcher.state import AgentState
 from researcher.console import Console
 from researcher.config import SYSTEM_MESSAGE, DEFAULT_MODEL, DATA_DIR, DEFAULT_MAX_TOKENS
 from researcher.tools import (
-    setup_retriever, 
-    find_manuscript, 
-    read_from_file, 
-    count_words, 
-    get_user_input, 
-    DEFAULT_TOOLS
+    setup_retriever,
+    find_manuscript,
+    read_from_file,
+    count_words,
+    get_user_input,
+    DEFAULT_TOOLS,
 )
+
 
 @weave.op
 def session(agent: Agent, agent_state: AgentState):
@@ -32,7 +33,8 @@ def session(agent: Agent, agent_state: AgentState):
                 break
             else:
                 agent_state = AgentState(
-                    messages=agent_state.messages + [
+                    messages=agent_state.messages
+                    + [
                         {
                             "role": "user",
                             "content": user_input,
@@ -43,7 +45,7 @@ def session(agent: Agent, agent_state: AgentState):
         print("\nSession interrupted by user.")
     except Exception as e:
         print(f"\nAn error occurred: {str(e)}")
-    
+
     return agent_state
 
 
@@ -59,27 +61,28 @@ def handle_existing_manuscript() -> Tuple[Optional[str], Optional[str]]:
     manuscript_path, location = find_manuscript()
     if not os.path.exists(manuscript_path):
         return None, None
-        
+
     content = read_from_file(manuscript_path)
     word_count = count_words(content)
-    
+
     Console.print("[bold cyan]Found existing manuscript![/bold cyan]")
     Console.print(f"📄 Location: {location}")
     Console.print(f"📊 Stats:")
     Console.print(f"- Characters: {len(content):,}")
     Console.print(f"- Words: {word_count:,}")
-    
+
     user_input = get_user_input("Would you like to continue working on this manuscript? (yes/no)")
-    
+
     if user_input.lower().startswith("y"):
         return content, word_count
-    
+
     Console.print("\nStarting fresh with a new manuscript.\n")
     return None, None
 
+
 def create_initial_state(existing_content: Optional[str] = None, word_count: Optional[int] = None) -> AgentState:
     initial_prompt = get_initial_prompt()
-    
+
     if existing_content:
         return AgentState(
             messages=[
@@ -87,17 +90,14 @@ def create_initial_state(existing_content: Optional[str] = None, word_count: Opt
                     "role": "system",
                     "content": SYSTEM_MESSAGE,
                 },
-                {
-                    "role": "assistant",
-                    "content": f"Current manuscript ({word_count:,} words):\n\n{existing_content}"
-                },
+                {"role": "assistant", "content": f"Current manuscript ({word_count:,} words):\n\n{existing_content}"},
                 {
                     "role": "user",
                     "content": initial_prompt,
                 },
             ],
         )
-    
+
     return AgentState(
         messages=[
             {
@@ -111,29 +111,18 @@ def create_initial_state(existing_content: Optional[str] = None, word_count: Opt
         ],
     )
 
+
 def main():
     @dataclass
     class MainArgs:
         """Arguments for main researcher process"""
-        data_dir: Path = sp.field(
-            default=DATA_DIR,
-            help="Folder with documents to index"
-        )
-        model_name: str = sp.field(
-            default=DEFAULT_MODEL,
-            help="Model name"
-        )
-        system_message: str = sp.field(
-            default=SYSTEM_MESSAGE,
-            help="System message"
-        )
-        max_tokens: int = sp.field(
-            default=DEFAULT_MAX_TOKENS,
-            help="Maximum tokens for context generation"
-        )
+
+        data_dir: Path = DATA_DIR  # Folder with documents to index
+        model_name: str = DEFAULT_MODEL  # Model name
+        system_message: str = SYSTEM_MESSAGE  # System message
+        max_tokens: int = DEFAULT_MAX_TOKENS  # Maximum tokens for context generation
 
     args = sp.parse(MainArgs)
-
 
     weave.init("researcher")
     Console.welcome(args)
@@ -141,12 +130,7 @@ def main():
 
     content, word_count = handle_existing_manuscript()
     state = create_initial_state(content, word_count)
-    agent = Agent(
-        model_name=args.model_name,
-        temperature=0.7,
-        tools=DEFAULT_TOOLS,
-        max_tokens=args.max_tokens
-    )
+    agent = Agent(model_name=args.model_name, temperature=0.7, tools=DEFAULT_TOOLS, max_tokens=args.max_tokens)
     session(agent, state)
 
 

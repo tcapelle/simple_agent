@@ -1,7 +1,6 @@
 import json
 import os
 import sys
-from enum import Enum
 from datetime import datetime
 from pathlib import Path
 
@@ -26,6 +25,7 @@ def ensure_workdir():
         os.makedirs(WORKDIR)
         print(f"Created workspace directory: {WORKDIR}")
 
+
 def find_manuscript():
     """
     Find the manuscript file in either current directory or workdir.
@@ -33,21 +33,22 @@ def find_manuscript():
     """
     # Check common manuscript filenames
     possible_names = ["manuscript.txt", "current_manuscript.txt", "manuscript.md", "current_manuscript.md"]
-    
+
     # First check workdir
     ensure_workdir()
     for name in possible_names:
         path = os.path.join(WORKDIR, name)
         if os.path.exists(path):
             return path, "workdir"
-    
+
     # Then check current directory
     for name in possible_names:
         if os.path.exists(name):
             return name, "current directory"
-    
+
     # If no manuscript found, return default path in workdir
     return os.path.join(WORKDIR, "manuscript.txt"), "workdir"
+
 
 def get_manuscript_backup_path():
     """Get a timestamped backup path for the manuscript"""
@@ -55,6 +56,7 @@ def get_manuscript_backup_path():
     base_dir = os.path.dirname(manuscript_path)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     return os.path.join(base_dir, f"manuscript_{timestamp}.txt")
+
 
 def setup_retriever(db_path: Path):
     """Initialize the global retriever instance"""
@@ -70,30 +72,35 @@ def setup_retriever(db_path: Path):
     Console.print(f"📚 Location: {db_path}\n")
     retriever = ContextualVectorDB.load_db(db_path=db_path)
 
+
 def count_words(text: str) -> int:
     """Count the number of words in a text."""
     return len(text.split())
 
+
 @weave.op
 def critique_content(question: str, personality: Personality = Personality.PHD_ADVISOR) -> str:
     """Get critique for the current manuscript using specified personality.
-    
+
     Args:
         question: Question or topic to explore in the critique
         personality: Personality to use for critique (default: phd_advisor)
     """
     manuscript_path, _ = find_manuscript()
-    
+
     try:
         text = read_from_file(manuscript_path)
     except FileNotFoundError:
         return f"No manuscript found at {manuscript_path}. Please create one first."
     print(personality)
     critique = _critique_text(question, text, personality)
-    
+
     # Add suggestion to proceed with revisions
-    return (f"{critique}\n\n"
-            f"I have provided the critique above. Implement the suggested changes and save the manuscript.")
+    return (
+        f"{critique}\n\n"
+        f"I have provided the critique above. Implement the suggested changes and save the manuscript."
+    )
+
 
 def _critique_text(question: str, text: str, personality: str) -> str:
     """Provide feedback on a given text based on the selected personality using LLM."""
@@ -104,8 +111,8 @@ def _critique_text(question: str, text: str, personality: str) -> str:
         model=DEFAULT_MODEL,
         messages=[
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": f"# Question:\n\n{question}\n\n## Current manuscript:\n\n{text}"}
-        ]
+            {"role": "user", "content": f"# Question:\n\n{question}\n\n## Current manuscript:\n\n{text}"},
+        ],
     )
 
     return response.choices[0].message.content
@@ -118,7 +125,7 @@ def retrieve_relevant_documents(query: str, k: int = 5) -> str:
     - Use this tool when you need to find relevant information in the database.
     - When asked for citations, use this tool to find the relevant documents.
     - Use this tool to keep your research grounded to our dacuments.
-    
+
     Args:
         query: Search query
         k: Number of documents to retrieve (default: 5)
@@ -126,7 +133,7 @@ def retrieve_relevant_documents(query: str, k: int = 5) -> str:
     global retriever
     if not retriever:
         raise ValueError("Retriever not initialized. Call setup_retriever first.")
-    
+
     results = retriever.search(query=query, k=k)
     response = f"I found {len(results)} relevant documents:\n\n"
     response += "\n\n".join(
@@ -135,6 +142,7 @@ def retrieve_relevant_documents(query: str, k: int = 5) -> str:
     print(f"I found {len(results)} relevant documents")
     print(response)
     return response
+
 
 @weave.op
 def list_files(directory: str) -> str:
@@ -152,6 +160,7 @@ def list_files(directory: str) -> str:
         result += "\n... (truncated)"
     return result
 
+
 @weave.op
 def write_to_file(path: str, content: str) -> str:
     """Write text to a file at the given path.
@@ -167,15 +176,16 @@ def write_to_file(path: str, content: str) -> str:
     manuscript_path, _ = find_manuscript()
     if os.path.exists(path) and path == manuscript_path:
         backup_path = get_manuscript_backup_path()
-        with open(path, 'r', encoding='utf-8') as src, open(backup_path, 'w', encoding='utf-8') as dst:
+        with open(path, "r", encoding="utf-8") as src, open(backup_path, "w", encoding="utf-8") as dst:
             dst.write(src.read())
-    
+
     # Ensure directory exists
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
-    
-    with open(path, "w", encoding='utf-8') as f:
+
+    with open(path, "w", encoding="utf-8") as f:
         f.write(content)
     return f"File written successfully to {path}" + (" (backup created)" if path == manuscript_path else "")
+
 
 @weave.op
 def read_from_file(path: str) -> str:
@@ -187,7 +197,7 @@ def read_from_file(path: str) -> str:
     Returns:
         The content of the file.
     """
-    with open(path, "r", encoding='utf-8') as f:
+    with open(path, "r", encoding="utf-8") as f:
         result = f.read()
         if len(result) > LENGTH_LIMIT:
             result = result[:LENGTH_LIMIT]
@@ -208,7 +218,7 @@ def think(thought: str) -> str:
 @weave.op
 def get_user_input(prompt: str = "User input: ") -> str:
     """When you need to get input from the user, use this tool.
-    
+
     Args:
         prompt: The prompt to display to the user.
 
@@ -218,11 +228,12 @@ def get_user_input(prompt: str = "User input: ") -> str:
     Console.step_start("user_input", "purple")
     return input(prompt)
 
+
 DEFAULT_TOOLS = [
-    list_files, 
-    write_to_file, 
+    list_files,
+    write_to_file,
     read_from_file,
-    retrieve_relevant_documents, 
-    critique_content, 
-    think, 
+    retrieve_relevant_documents,
+    critique_content,
+    think,
 ]

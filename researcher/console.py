@@ -9,7 +9,7 @@ class Console:
     def welcome(args) -> None:
         console.rule("[bold blue]Researcher")
         console.print("[bold green]Welcome to researcher![/bold green]\n")
-        
+
         # Format args in a more readable way
         console.print("[bold cyan]Configuration:[/bold cyan]")
         console.print(f"  [yellow]Model:[/yellow] {args.model_name}")

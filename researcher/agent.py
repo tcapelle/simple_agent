@@ -1,7 +1,6 @@
 import os
 from typing import Any, List
 from pydantic import Field
-from openai._types import NotGiven
 
 from mistralai import Mistral
 
@@ -14,11 +13,13 @@ from .state import AgentState
 
 client = Mistral(os.getenv("MISTRAL_API_KEY"))
 
+
 class Agent(weave.Object):
     model_name: str
     temperature: float
     tools: List[Any] = Field(default_factory=list)
     max_tokens: int = 1000
+
     def model_post_init(self, __context: Any) -> None:
         if self.tools:
             self.tools = [function_tool(tool) for tool in self.tools]
@@ -52,9 +53,7 @@ class Agent(weave.Object):
         new_messages = []
         new_messages.append(response_message.model_dump(exclude_none=True))
         if response_message.tool_calls:
-            new_messages.extend(
-                perform_tool_calls(self.tools, response_message.tool_calls)
-            )
+            new_messages.extend(perform_tool_calls(self.tools, response_message.tool_calls))
 
         return AgentState(messages=state.messages + new_messages)
 

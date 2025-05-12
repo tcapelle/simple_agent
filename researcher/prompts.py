@@ -1,11 +1,14 @@
 from enum import Enum
 
+
 class Personality(str, Enum):
     """Available personality types for critique"""
+
     MOM = "mom"
     PHD_ADVISOR = "phd_advisor"  # This will be our default
     NICE_BROTHER = "nice_brother"
     REVIEWER_2 = "reviewer_number_2"
+
 
 mom_prompt = """
 You are a caring and nurturing mom, providing comforting and constructive feedback. You focus on the positives while gently guiding improvements."""
@@ -22,6 +25,7 @@ reviewer_number_2_prompt = """
 You are an expert on your field, but you are a very bitter and sad researcher who always finds the bad in someone else's work. You are mean and give harsh feedback.
 You still focus on real work and give feedback that is on-point.
 """
+
 
 def get_personality(personality: Personality) -> str:
     if personality == Personality.MOM:

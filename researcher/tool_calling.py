@@ -7,7 +7,7 @@ from .console import Console
 
 def generate_json_schema(func: Callable) -> dict:
     """Given a function, generate an OpenAI tool compatible JSON schema.
-    
+
     Handles special cases like AgentState and Enums.
     """
     # Extract function signature
@@ -39,7 +39,7 @@ def generate_json_schema(func: Callable) -> dict:
 
         # Get parameter type
         param_type = type_hints.get(name, Any)
-        
+
         # Convert Python types to JSON schema types
         if param_type == str:
             json_type = "string"
@@ -61,10 +61,7 @@ def generate_json_schema(func: Callable) -> dict:
                     break
 
         # Build parameter schema
-        param_schema = {
-            "type": json_type,
-            "description": param_desc
-        }
+        param_schema = {"type": json_type, "description": param_desc}
 
         # Handle Enum types
         if hasattr(param_type, "__members__"):
@@ -81,13 +78,14 @@ def generate_json_schema(func: Callable) -> dict:
 
     return schema
 
+
 def function_tool(func: Callable) -> Callable:
     """Attaches a tool schema to the function and marks it as a tool.
     Call this *after* defining your function: my_func = function_tool(my_func)
     """
     try:
         func.tool_schema = generate_json_schema(func)
-        func.is_tool = True # Mark it as a tool
+        func.is_tool = True  # Mark it as a tool
     except Exception as e:
         print(f"Error processing tool {func.__name__}: {e}")
         # Optionally raise or mark as failed
@@ -103,9 +101,7 @@ def get_tool(tools: list[Callable], name: str) -> Callable:
     raise KeyError(f"No tool with name {name} found")
 
 
-def perform_tool_calls(
-    tools: list[Callable], tool_calls: list
-) -> list[dict]:
+def perform_tool_calls(tools: list[Callable], tool_calls: list) -> list[dict]:
     messages = []
     for tool_call in tool_calls:
         function_name = tool_call.function.name
