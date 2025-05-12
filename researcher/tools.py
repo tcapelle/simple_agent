@@ -6,6 +6,7 @@ from datetime import datetime
 from pathlib import Path
 
 import weave
+from researcher.prompts import Personality, get_personality
 from researcher.console import Console
 from researcher.config import DEFAULT_MODEL, WORKDIR
 from researcher.rag import ContextualVectorDB
@@ -69,13 +70,6 @@ def setup_retriever(db_path: Path):
     Console.print(f"📚 Location: {db_path}\n")
     retriever = ContextualVectorDB.load_db(db_path=db_path)
 
-class Personality(str, Enum):
-    """Available personality types for critique"""
-    MOM = "mom"
-    PHD_ADVISOR = "phd_advisor"  # This will be our default
-    NICE_BROTHER = "nice_brother"
-    REVIEWER_2 = "reviewer_number_2"
-
 def count_words(text: str) -> int:
     """Count the number of words in a text."""
     return len(text.split())
@@ -103,15 +97,7 @@ def critique_content(question: str, personality: Personality = Personality.PHD_A
 
 def _critique_text(question: str, text: str, personality: str) -> str:
     """Provide feedback on a given text based on the selected personality using LLM."""
-    prompt_dir = os.path.join(os.path.dirname(__file__), 'prompts')
-    # Determine the correct filename from Personality enum
-    if isinstance(personality, Personality):
-        personality_name = personality.value
-    else:
-        personality_name = str(personality)
-    prompt_path = os.path.join(prompt_dir, f"{personality_name}.txt")
-    with open(prompt_path, 'r') as f:
-        system_prompt = f.read()
+    system_prompt = get_personality(personality)
 
     client = Mistral(os.getenv("MISTRAL_API_KEY"))
     response = client.chat.complete(
