@@ -19,7 +19,7 @@ from researcher.console import console
 @dataclass
 class RAGArgs:
     """Arguments for RAG processing"""
-    db_path: Path = sp.field(
+    data_dir: Path = sp.field(
         default=DATA_DIR, 
         help="Path to store/load the vector database"
     )
@@ -292,14 +292,14 @@ def create_db():
         try:
             # Load the transformed dataset
             transformed_dataset = []
-            with open(f'{args.db_path}/processed_documents.jsonl', 'r') as f:
+            with open(f'{args.data_dir}/processed_documents.jsonl', 'r') as f:
                 for i, line in enumerate(f):
                     if args.debug and i > 1:
                         break
                     transformed_dataset.append(json.loads(line))
             
             db = ContextualVectorDB(
-                db_path=args.db_path,
+                db_path=args.data_dir,
                 model=args.model,
                 embedding_model=args.embedding_model,
                 temperature=args.temperature,
