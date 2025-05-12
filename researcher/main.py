@@ -11,7 +11,12 @@ import weave
 from researcher.agent import Agent
 from researcher.state import AgentState
 from researcher.console import Console
-from researcher.config import SYSTEM_MESSAGE, DEFAULT_MODEL, DATA_DIR, DEFAULT_MAX_TOKENS
+from researcher.config import (
+    SYSTEM_MESSAGE,
+    DEFAULT_MODEL,
+    DATA_DIR,
+    DEFAULT_MAX_TOKENS,
+)
 from researcher.tools import (
     setup_retriever,
     find_manuscript,
@@ -71,7 +76,9 @@ def handle_existing_manuscript() -> Tuple[Optional[str], Optional[str]]:
     Console.print(f"- Characters: {len(content):,}")
     Console.print(f"- Words: {word_count:,}")
 
-    user_input = get_user_input("Would you like to continue working on this manuscript? (yes/no)")
+    user_input = get_user_input(
+        "Would you like to continue working on this manuscript? (yes/no)"
+    )
 
     if user_input.lower().startswith("y"):
         return content, word_count
@@ -80,7 +87,9 @@ def handle_existing_manuscript() -> Tuple[Optional[str], Optional[str]]:
     return None, None
 
 
-def create_initial_state(existing_content: Optional[str] = None, word_count: Optional[int] = None) -> AgentState:
+def create_initial_state(
+    existing_content: Optional[str] = None, word_count: Optional[int] = None
+) -> AgentState:
     initial_prompt = get_initial_prompt()
 
     if existing_content:
@@ -90,7 +99,10 @@ def create_initial_state(existing_content: Optional[str] = None, word_count: Opt
                     "role": "system",
                     "content": SYSTEM_MESSAGE,
                 },
-                {"role": "assistant", "content": f"Current manuscript ({word_count:,} words):\n\n{existing_content}"},
+                {
+                    "role": "assistant",
+                    "content": f"Current manuscript ({word_count:,} words):\n\n{existing_content}",
+                },
                 {
                     "role": "user",
                     "content": initial_prompt,
@@ -130,7 +142,12 @@ def main():
 
     content, word_count = handle_existing_manuscript()
     state = create_initial_state(content, word_count)
-    agent = Agent(model_name=args.model_name, temperature=0.7, tools=DEFAULT_TOOLS, max_tokens=args.max_tokens)
+    agent = Agent(
+        model_name=args.model_name,
+        temperature=0.7,
+        tools=DEFAULT_TOOLS,
+        max_tokens=args.max_tokens,
+    )
     session(agent, state)
 
 

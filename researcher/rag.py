@@ -13,7 +13,13 @@ from mistralai import Mistral
 
 import weave
 
-from researcher.config import DATA_DIR, DEFAULT_EMBEDDING_MODEL, DEFAULT_MODEL, PARALLEL_REQUESTS, DEFAULT_WEAVE_PROJECT
+from researcher.config import (
+    DATA_DIR,
+    DEFAULT_EMBEDDING_MODEL,
+    DEFAULT_MODEL,
+    PARALLEL_REQUESTS,
+    DEFAULT_WEAVE_PROJECT,
+)
 from researcher.console import console
 
 
@@ -26,7 +32,9 @@ class RAGArgs:
     embedding_model: str = DEFAULT_EMBEDDING_MODEL  # Model to use for embeddings
     temperature: float = 0.0  # Temperature for context generation
     max_tokens: int = 1000  # Maximum tokens for context generation
-    parallel_requests: int = PARALLEL_REQUESTS  # Number of parallel requests for processing
+    parallel_requests: int = (
+        PARALLEL_REQUESTS  # Number of parallel requests for processing
+    )
     debug: bool = False  # Debug mode. Only process the first 2 documents
     weave_project: str = DEFAULT_WEAVE_PROJECT  # Weave project name
 
@@ -57,7 +65,12 @@ class ContextualVectorDB:
             "max_tokens": max_tokens,
         }
 
-        self.token_counts = {"input": 0, "output": 0, "cache_read": 0, "cache_creation": 0}
+        self.token_counts = {
+            "input": 0,
+            "output": 0,
+            "cache_read": 0,
+            "cache_creation": 0,
+        }
         self.token_lock = threading.Lock()
 
     @weave.op
@@ -75,7 +88,10 @@ class ContextualVectorDB:
         try:
             response = await self.mistral_client.chat.complete_async(
                 model=self.config["model"],
-                messages=[{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": USER_PROMPT}],
+                messages=[
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": USER_PROMPT},
+                ],
                 max_tokens=self.config["max_tokens"],
                 temperature=self.config["temperature"],
             )
@@ -92,7 +108,9 @@ class ContextualVectorDB:
             console.print(f"[red]Error in situate_context: {str(e)}")
             raise
 
-    async def load_data(self, dataset: List[Dict[str, Any]], parallel_requests: int = 25):
+    async def load_data(
+        self, dataset: List[Dict[str, Any]], parallel_requests: int = 25
+    ):
         if self.embeddings and self.metadata:
             print("Vector database is already loaded. Skipping data loading.")
             return
@@ -137,16 +155,26 @@ class ContextualVectorDB:
         self.save_db()
 
         # logging token usage
-        print(f"Contextual Vector database loaded and saved. Total chunks processed: {len(texts_to_embed)}")
+        print(
+            f"Contextual Vector database loaded and saved. Total chunks processed: {len(texts_to_embed)}"
+        )
         print(f"Total input tokens without caching: {self.token_counts['input']}")
         print(f"Total output tokens: {self.token_counts['output']}")
-        print(f"Total input tokens written to cache: {self.token_counts['cache_creation']}")
+        print(
+            f"Total input tokens written to cache: {self.token_counts['cache_creation']}"
+        )
         print(f"Total input tokens read from cache: {self.token_counts['cache_read']}")
 
         total_tokens = (
-            self.token_counts["input"] + self.token_counts["cache_read"] + self.token_counts["cache_creation"]
+            self.token_counts["input"]
+            + self.token_counts["cache_read"]
+            + self.token_counts["cache_creation"]
         )
-        savings_percentage = (self.token_counts["cache_read"] / total_tokens) * 100 if total_tokens > 0 else 0
+        savings_percentage = (
+            (self.token_counts["cache_read"] / total_tokens) * 100
+            if total_tokens > 0
+            else 0
+        )
         print(
             f"Total input token savings from prompt caching: {savings_percentage:.2f}% of all input tokens used were read from cache."
         )
@@ -163,7 +191,9 @@ class ContextualVectorDB:
                 loop = asyncio.get_running_loop()
                 response = await loop.run_in_executor(
                     None,
-                    lambda: self.mistral_client.embeddings.create(model=self.config["embedding_model"], inputs=batch),
+                    lambda: self.mistral_client.embeddings.create(
+                        model=self.config["embedding_model"], inputs=batch
+                    ),
                 )
                 batch_embeddings = [item.embedding for item in response.data]
                 all_embeddings.extend(batch_embeddings)
@@ -192,7 +222,9 @@ class ContextualVectorDB:
             loop = asyncio.get_running_loop()
             response = await loop.run_in_executor(
                 None,
-                lambda: self.mistral_client.embeddings.create(model=self.config["embedding_model"], inputs=[query]),
+                lambda: self.mistral_client.embeddings.create(
+                    model=self.config["embedding_model"], inputs=[query]
+                ),
             )
             query_embedding = response.data[0].embedding
             self.query_cache[query] = query_embedding
@@ -226,7 +258,9 @@ class ContextualVectorDB:
     @classmethod
     def load_db(cls, db_path: Path) -> "ContextualVectorDB":
         if not os.path.exists(db_path):
-            raise ValueError("Vector database file not found. Use load_data to create a new database.")
+            raise ValueError(
+                "Vector database file not found. Use load_data to create a new database."
+            )
 
         with open(db_path, "rb") as file:
             data = pickle.load(file)
@@ -277,13 +311,16 @@ def create_db():
             # Test single context generation
             console.print("[green]Testing single context generation...")
             result = await db.situate_context(
-                transformed_dataset[0]["content"], transformed_dataset[0]["chunks"][0]["content"]
+                transformed_dataset[0]["content"],
+                transformed_dataset[0]["chunks"][0]["content"],
             )
             console.print(f"Sample context: {result[0]}")
 
             # Load all data
             console.print("[green]Loading full dataset...")
-            db = await db.load_data(transformed_dataset, parallel_requests=args.parallel_requests)
+            db = await db.load_data(
+                transformed_dataset, parallel_requests=args.parallel_requests
+            )
             return db
         except Exception as e:
             console.print(f"[red]Error in main process: {str(e)}")
@@ -294,7 +331,9 @@ def create_db():
 
     # Test search functionality
     console.print("[green]Testing search functionality...")
-    sample_query = "What Unesco places are in Chile?"  # Replace with an actual test query
+    sample_query = (
+        "What Unesco places are in Chile?"  # Replace with an actual test query
+    )
     results = db.search(sample_query, k=3)
     console.print(f"Sample search results: {results}")
 

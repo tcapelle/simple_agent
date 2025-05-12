@@ -90,9 +90,13 @@ class OpenAIStream:
                         tool_call["type"] = tool_call_delta.type
                     if tool_call_delta.function is not None:
                         if tool_call_delta.function.name is not None:
-                            tool_call["function"]["name"] = tool_call_delta.function.name
+                            tool_call["function"][
+                                "name"
+                            ] = tool_call_delta.function.name
                         if tool_call_delta.function.arguments is not None:
-                            tool_call["function"]["arguments"] += tool_call_delta.function.arguments
+                            tool_call["function"][
+                                "arguments"
+                            ] += tool_call_delta.function.arguments
 
     def final_response(self) -> "ChatCompletion":
         from openai.types.chat import ChatCompletion
@@ -173,8 +177,12 @@ class MistralAIStream:
                     choice["message"]["tool_calls"] = []
                 for tool_call_delta in chunk_choice.delta.tool_calls:
                     # Ensure tool_calls list is large enough
-                    for j in range(tool_call_delta.index + 1 - len(choice["message"]["tool_calls"])):
-                        choice["message"]["tool_calls"].append({"function": {"name": None, "arguments": ""}})
+                    for j in range(
+                        tool_call_delta.index + 1 - len(choice["message"]["tool_calls"])
+                    ):
+                        choice["message"]["tool_calls"].append(
+                            {"function": {"name": None, "arguments": ""}}
+                        )
                     tool_call = choice["message"]["tool_calls"][tool_call_delta.index]
                     if getattr(tool_call_delta, "id", None) is not None:
                         tool_call["id"] = tool_call_delta.id
@@ -182,9 +190,13 @@ class MistralAIStream:
                         tool_call["type"] = tool_call_delta.type
                     if getattr(tool_call_delta, "function", None):
                         if tool_call_delta.function.name is not None:
-                            tool_call["function"]["name"] = tool_call_delta.function.name
+                            tool_call["function"][
+                                "name"
+                            ] = tool_call_delta.function.name
                         if tool_call_delta.function.arguments is not None:
-                            tool_call["function"]["arguments"] += tool_call_delta.function.arguments
+                            tool_call["function"][
+                                "arguments"
+                            ] += tool_call_delta.function.arguments
 
     def final_response(self) -> "ChatCompletionResponse":
         # Construct and return a ChatCompletionResponse from Mistral models

@@ -32,7 +32,12 @@ def find_manuscript():
     Returns tuple of (path, location_description).
     """
     # Check common manuscript filenames
-    possible_names = ["manuscript.txt", "current_manuscript.txt", "manuscript.md", "current_manuscript.md"]
+    possible_names = [
+        "manuscript.txt",
+        "current_manuscript.txt",
+        "manuscript.md",
+        "current_manuscript.md",
+    ]
 
     # First check workdir
     ensure_workdir()
@@ -66,7 +71,9 @@ def setup_retriever(db_path: Path):
         Console.print(f"No database found at: {db_path}")
         Console.print("\nTo create a new database, please run:")
         Console.print("    researcher.prepare")
-        Console.print("\nThis will process your documents in `my_data` and create the necessary database.")
+        Console.print(
+            "\nThis will process your documents in `my_data` and create the necessary database."
+        )
         sys.exit(1)
     Console.print("[bold cyan]Found existing database![/bold cyan]")
     Console.print(f"📚 Location: {db_path}\n")
@@ -79,7 +86,9 @@ def count_words(text: str) -> int:
 
 
 @weave.op
-def critique_content(question: str, personality: Personality = Personality.PHD_ADVISOR) -> str:
+def critique_content(
+    question: str, personality: Personality = Personality.PHD_ADVISOR
+) -> str:
     """Get critique for the current manuscript using specified personality.
 
     Args:
@@ -111,7 +120,10 @@ def _critique_text(question: str, text: str, personality: str) -> str:
         model=DEFAULT_MODEL,
         messages=[
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": f"# Question:\n\n{question}\n\n## Current manuscript:\n\n{text}"},
+            {
+                "role": "user",
+                "content": f"# Question:\n\n{question}\n\n## Current manuscript:\n\n{text}",
+            },
         ],
     )
 
@@ -137,7 +149,8 @@ def retrieve_relevant_documents(query: str, k: int = 5) -> str:
     results = retriever.search(query=query, k=k)
     response = f"I found {len(results)} relevant documents:\n\n"
     response += "\n\n".join(
-        f"Document ID: {r['metadata']['doc_id']}\n{r['metadata']['original_content']}" for r in results
+        f"Document ID: {r['metadata']['doc_id']}\n{r['metadata']['original_content']}"
+        for r in results
     )
     print(f"I found {len(results)} relevant documents")
     print(response)
@@ -176,7 +189,10 @@ def write_to_file(path: str, content: str) -> str:
     manuscript_path, _ = find_manuscript()
     if os.path.exists(path) and path == manuscript_path:
         backup_path = get_manuscript_backup_path()
-        with open(path, "r", encoding="utf-8") as src, open(backup_path, "w", encoding="utf-8") as dst:
+        with (
+            open(path, "r", encoding="utf-8") as src,
+            open(backup_path, "w", encoding="utf-8") as dst,
+        ):
             dst.write(src.read())
 
     # Ensure directory exists
@@ -184,7 +200,9 @@ def write_to_file(path: str, content: str) -> str:
 
     with open(path, "w", encoding="utf-8") as f:
         f.write(content)
-    return f"File written successfully to {path}" + (" (backup created)" if path == manuscript_path else "")
+    return f"File written successfully to {path}" + (
+        " (backup created)" if path == manuscript_path else ""
+    )
 
 
 @weave.op

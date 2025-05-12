@@ -1,19 +1,26 @@
-import PyPDF2
-from pathlib import Path
-from typing import List, Dict, Union, Optional
-import re
-import math
-import uuid
-from datetime import datetime
-import json
-import simple_parsing as sp
 from dataclasses import dataclass
+from datetime import datetime
+from functools import partial
+from multiprocessing import Pool, cpu_count
+from pathlib import Path
+import json
+import re
+import statistics
 import tiktoken
-import statistics  # Add to imports at top
-from rich.table import Table  # Add to imports at top
-from multiprocessing import Pool, cpu_count  # Add to imports at top
-from functools import partial  # Add to imports at top
-from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, BarColumn, TextColumn, TaskProgressColumn
+import uuid
+
+import PyPDF2
+import simple_parsing as sp
+from rich.progress import (
+    Progress,
+    SpinnerColumn,
+    TimeElapsedColumn,
+    BarColumn,
+    TextColumn,
+    TaskProgressColumn,
+)
+from rich.table import Table
+from typing import List, Dict, Union, Optional
 
 from researcher.console import console
 
@@ -23,7 +30,9 @@ class PreprocessingArgs:
     """Arguments for preprocessing PDF documents"""
 
     data_dir: Path = Path("my_data/")  # Directory containing PDF files to process
-    output_file: Path = None  # Output JSONL file path. Defaults to 'processed_documents.jsonl' in data_dir
+    output_file: Path = (
+        None  # Output JSONL file path. Defaults to 'processed_documents.jsonl' in data_dir
+    )
     chunk_size: int = 512  # Target size of each chunk in characters
     max_workers: int = 6  # Maximum number of worker processes. Defaults to CPU count
     max_tokens_len: int = 100000  # Maximum number of tokens allowed per document
@@ -32,7 +41,9 @@ class PreprocessingArgs:
     )
 
 
-def generate_chunks(doc_id: str, document_content: str, chunk_size: int = 2048) -> List[Dict]:
+def generate_chunks(
+    doc_id: str, document_content: str, chunk_size: int = 2048
+) -> List[Dict]:
     """
     Splits a single document into chunks at natural break points (sentences or words).
 
@@ -206,7 +217,9 @@ def count_tokens(text: str, model: str = "gpt-3.5-turbo") -> int:
         return len(encoding.encode(text))
 
 
-def process_file(file_path: Union[str, Path]) -> Dict[str, Union[str, List[Dict[str, str]], int, Optional[str]]]:
+def process_file(
+    file_path: Union[str, Path],
+) -> Dict[str, Union[str, List[Dict[str, str]], int, Optional[str]]]:
     """
     Process a single file and return its metadata, content, and chunks.
 
@@ -245,7 +258,9 @@ def process_file(file_path: Union[str, Path]) -> Dict[str, Union[str, List[Dict[
 
 
 def batch_process_files(
-    file_paths: List[Union[str, Path]], max_workers: int = None, max_tokens_len: int = 100000
+    file_paths: List[Union[str, Path]],
+    max_workers: int = None,
+    max_tokens_len: int = 100000,
 ) -> List[Dict]:
     """
     Process multiple files in parallel.
@@ -272,7 +287,10 @@ def batch_process_files(
         console=console,
         expand=True,
     ) as progress:
-        task = progress.add_task(f"[green]Processing files using {max_workers} workers", total=len(file_paths))
+        task = progress.add_task(
+            f"[green]Processing files using {max_workers} workers",
+            total=len(file_paths),
+        )
 
         with Pool(processes=max_workers) as pool:
             for result in pool.imap(process_file, file_paths):
@@ -338,10 +356,14 @@ def save_to_jsonl(documents: List[Dict], output_path: Union[str, Path]) -> None:
             f.write(json_line + "\n")
 
 
-def calculate_token_stats(documents: List[Dict], chunk_size: int) -> Dict[str, Union[int, float, str]]:
+def calculate_token_stats(
+    documents: List[Dict], chunk_size: int
+) -> Dict[str, Union[int, float, str]]:
     """Calculate statistics about token usage across all documents."""
     # Get document stats with filenames
-    doc_tokens_with_names = [(doc["total_tokens"], doc["original_doc_name"]) for doc in documents]
+    doc_tokens_with_names = [
+        (doc["total_tokens"], doc["original_doc_name"]) for doc in documents
+    ]
 
     # Find min/max with filenames
     min_doc = min(doc_tokens_with_names, key=lambda x: x[0])
@@ -374,7 +396,9 @@ def calculate_token_stats(documents: List[Dict], chunk_size: int) -> Dict[str, U
 
 def truncate_filename(filename: str, max_length: int = 50) -> str:
     """Truncate filename if longer than max_length and add ellipsis."""
-    return filename if len(filename) <= max_length else filename[: max_length - 3] + "..."
+    return (
+        filename if len(filename) <= max_length else filename[: max_length - 3] + "..."
+    )
 
 
 def main():
@@ -389,11 +413,15 @@ def main():
     console.print(f"Found {len(pdf_files)} PDF files in {args.data_dir}")
 
     # Process all files with specified chunk size and worker count
-    processed_files = batch_process_files(pdf_files, max_workers=args.max_workers, max_tokens_len=args.max_tokens_len)
+    processed_files = batch_process_files(
+        pdf_files, max_workers=args.max_workers, max_tokens_len=args.max_tokens_len
+    )
 
     # Save to JSONL
     save_to_jsonl(processed_files, args.output_file)
-    console.print(f"\n[green]Saved {len(processed_files)} documents to {args.output_file}")
+    console.print(
+        f"\n[green]Saved {len(processed_files)} documents to {args.output_file}"
+    )
 
     # Calculate token statistics
     token_stats = calculate_token_stats(processed_files, args.chunk_size)
@@ -401,7 +429,9 @@ def main():
     console.rule("[bold blue]Token Statistics")
 
     # Create and populate the table
-    table = Table(title="Token Usage Statistics", show_header=True, header_style="bold magenta")
+    table = Table(
+        title="Token Usage Statistics", show_header=True, header_style="bold magenta"
+    )
 
     # Add columns
     table.add_column("Metric", style="cyan")
