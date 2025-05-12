@@ -7,14 +7,13 @@ from pathlib import Path
 
 import weave
 from researcher.console import Console
-from researcher.config import DEFAULT_MODEL
+from researcher.config import DEFAULT_MODEL, WORKDIR
 from researcher.rag import ContextualVectorDB
 
 from mistralai import Mistral
 
 
 LENGTH_LIMIT = 10000
-WORKDIR = "workdir"  # Default workspace directory
 
 # Global retriever instance
 retriever = None
@@ -32,7 +31,7 @@ def find_manuscript():
     Returns tuple of (path, location_description).
     """
     # Check common manuscript filenames
-    possible_names = ["manuscript.txt", "current_manuscript.txt"]
+    possible_names = ["manuscript.txt", "current_manuscript.txt", "manuscript.md", "current_manuscript.md"]
     
     # First check workdir
     ensure_workdir()
@@ -61,13 +60,13 @@ def setup_retriever(db_path: Path):
     global retriever
     ensure_workdir()
     if not db_path.exists():
-        print(f"No database found at: {db_path}")
-        print("\nTo create a new database, please run:")
-        print("    researcher.prepare")
-        print("\nThis will process your documents in `my_data` and create the necessary database.")
+        Console.print(f"No database found at: {db_path}")
+        Console.print("\nTo create a new database, please run:")
+        Console.print("    researcher.prepare")
+        Console.print("\nThis will process your documents in `my_data` and create the necessary database.")
         sys.exit(1)
-    print("Found existing database!")
-    print(f"📚 Location: {db_path}")
+    Console.print("[bold cyan]Found existing database![/bold cyan]")
+    Console.print(f"📚 Location: {db_path}\n")
     retriever = ContextualVectorDB.load_db(db_path=db_path)
 
 class Personality(str, Enum):
@@ -102,7 +101,6 @@ def critique_content(question: str, personality: Personality = Personality.PHD_A
     return (f"{critique}\n\n"
             f"I have provided the critique above. Implement the suggested changes and save the manuscript.")
 
-@weave.op
 def _critique_text(question: str, text: str, personality: str) -> str:
     """Provide feedback on a given text based on the selected personality using LLM."""
     prompt_dir = os.path.join(os.path.dirname(__file__), 'prompts')
@@ -129,8 +127,11 @@ def _critique_text(question: str, text: str, personality: str) -> str:
 
 @weave.op
 def retrieve_relevant_documents(query: str, k: int = 5) -> str:
-    """Retrieve relevant documents based on the query. The documents
-    are mostly in english so make sure to query them in english.
+    """Searches the database for relevant documents based on the query.
+    The documents are mostly in english so make sure to query them in english.
+    - Use this tool when you need to find relevant information in the database.
+    - When asked for citations, use this tool to find the relevant documents.
+    - Use this tool to keep your research grounded to our dacuments.
     
     Args:
         query: Search query
@@ -232,6 +233,10 @@ def get_user_input(prompt: str = "User input: ") -> str:
     return input(prompt)
 
 DEFAULT_TOOLS = [
-    list_files, write_to_file, read_from_file,
-    retrieve_relevant_documents, critique_content, think, get_user_input
+    list_files, 
+    write_to_file, 
+    read_from_file,
+    retrieve_relevant_documents, 
+    critique_content, 
+    think, 
 ]

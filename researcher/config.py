@@ -35,3 +35,6 @@ PARALLEL_REQUESTS = 10
 # Weave parameters
 DEFAULT_WEAVE_PROJECT = "researcher"
 os.environ["WEAVE_PRINT_CALL_LINK"] = "0"
+
+# Workspace parameters
+WORKDIR = Path("workdir")  # Default workspace directory

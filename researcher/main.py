@@ -11,40 +11,34 @@ import weave
 from researcher.agent import Agent
 from researcher.state import AgentState
 from researcher.console import Console
-from researcher.config import SYSTEM_MESSAGE, DEFAULT_MODEL
-from researcher.tools import setup_retriever, find_manuscript, read_from_file, count_words, get_user_input, DEFAULT_TOOLS
-
-
-# @weave.op
-# def get_user_input(prompt: str = "User input: "):
-#     return input(prompt)
-
-
-# @weave.op
-# def user_input_step(state: AgentState) -> AgentState:
-#     Console.step_start("user_input", "purple")
-#     user_input = get_user_input()
-#     return AgentState(
-#         messages=state.messages
-#         + [
-#             {
-#                 "role": "user",
-#                 "content": user_input,
-#             }
-#         ],
-#     )
+from researcher.config import SYSTEM_MESSAGE, DEFAULT_MODEL, DATA_DIR, DEFAULT_MAX_TOKENS
+from researcher.tools import (
+    setup_retriever, 
+    find_manuscript, 
+    read_from_file, 
+    count_words, 
+    get_user_input, 
+    DEFAULT_TOOLS
+)
 
 @weave.op
 def session(agent: Agent, agent_state: AgentState):
     try:
         while True:
             agent_state = agent.run(agent_state)
-            # agent_state = user_input_step(agent_state)
-            # Check for exit commands in last message
-            last_message = agent_state.messages[-1]["content"].lower()
-            if last_message in ["exit", "quit", "bye"]:
+            user_input = get_user_input()
+            if user_input in ["exit", "quit", "bye"]:
                 print("\nEnding session at user request.")
-                break    
+                break
+            else:
+                agent_state = AgentState(
+                    messages=agent_state.messages + [
+                        {
+                            "role": "user",
+                            "content": user_input,
+                        }
+                    ]
+                )
     except KeyboardInterrupt:
         print("\nSession interrupted by user.")
     except Exception as e:
@@ -69,19 +63,18 @@ def handle_existing_manuscript() -> Tuple[Optional[str], Optional[str]]:
     content = read_from_file(manuscript_path)
     word_count = count_words(content)
     
-    print("\n" + "="*80)
-    print("Found existing manuscript!")
-    print(f"📄 Location: {location}")
-    print(f"📊 Stats:")
-    print(f"- Characters: {len(content):,}")
-    print(f"- Words: {word_count:,}")
+    Console.print("[bold cyan]Found existing manuscript![/bold cyan]")
+    Console.print(f"📄 Location: {location}")
+    Console.print(f"📊 Stats:")
+    Console.print(f"- Characters: {len(content):,}")
+    Console.print(f"- Words: {word_count:,}")
     
     user_input = get_user_input("Would you like to continue working on this manuscript? (yes/no)")
     
     if user_input.lower().startswith("y"):
         return content, word_count
     
-    print("\nStarting fresh with a new manuscript.\n")
+    Console.print("\nStarting fresh with a new manuscript.\n")
     return None, None
 
 def create_initial_state(existing_content: Optional[str] = None, word_count: Optional[int] = None) -> AgentState:
@@ -122,17 +115,9 @@ def main():
     @dataclass
     class MainArgs:
         """Arguments for main researcher process"""
-        state: str = sp.field(
-            default=None,
-            help="weave ref of the state to begin from"
-        )
-        data_path: Path = sp.field(
-            default="my_data",
+        data_dir: Path = sp.field(
+            default=DATA_DIR,
             help="Folder with documents to index"
-        )
-        database: str = sp.field(
-            default="my_data/contextual_vector_db.pkl",
-            help="Path to the database file"
         )
         model_name: str = sp.field(
             default=DEFAULT_MODEL,
@@ -143,7 +128,7 @@ def main():
             help="System message"
         )
         max_tokens: int = sp.field(
-            default=1000,
+            default=DEFAULT_MAX_TOKENS,
             help="Maximum tokens for context generation"
         )
 
@@ -151,8 +136,8 @@ def main():
 
 
     weave.init("researcher")
-    Console.welcome()
-    setup_retriever(args.data_path / "contextual_vector_db.pkl")
+    Console.welcome(args)
+    setup_retriever(args.data_dir / "contextual_vector_db.pkl")
 
     content, word_count = handle_existing_manuscript()
     state = create_initial_state(content, word_count)

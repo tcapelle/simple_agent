@@ -47,6 +47,8 @@ Use the `researcher` entrypoint to launch the interactive manuscript assistant:
 researcher
 ```
 
+![](images/researcher_traces.png)
+
 - On first run, if no database is found, you can run `researcher.prepare` (as above) to generate the preprocessed documents and vector DB.
 - The agent will prompt you for an initial manuscript prompt or resume an existing one. Use `exit` or `quit` to end the session.
 

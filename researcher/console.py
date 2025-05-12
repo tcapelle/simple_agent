@@ -6,9 +6,16 @@ console = RichConsole()
 
 class Console:
     @staticmethod
-    def welcome() -> None:
+    def welcome(args) -> None:
         console.rule("[bold blue]Researcher")
-        console.print("Welcome to researcher.\n")
+        console.print("[bold green]Welcome to researcher![/bold green]\n")
+        
+        # Format args in a more readable way
+        console.print("[bold cyan]Configuration:[/bold cyan]")
+        console.print(f"  [yellow]Model:[/yellow] {args.model_name}")
+        console.print(f"  [yellow]Data path:[/yellow] {args.data_dir}")
+        console.print(f"  [yellow]Max tokens:[/yellow] {args.max_tokens}")
+        console.print()
 
     @staticmethod
     def step_start(name: str, color: str) -> None:
@@ -46,3 +53,7 @@ class Console:
     @staticmethod
     def user_input_complete(user_input: str) -> None:
         console.print()
+
+    @staticmethod
+    def print(message: str) -> None:
+        console.print(message)
