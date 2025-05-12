@@ -37,4 +37,4 @@ DEFAULT_WEAVE_PROJECT = "researcher"
 os.environ["WEAVE_PRINT_CALL_LINK"] = "0"
 
 # Workspace parameters
-WORKDIR = Path("workdir")  # Default workspace directory
+ORKDIR = Path("./workdir")  # Default workspace directory
