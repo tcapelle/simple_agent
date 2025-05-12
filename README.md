@@ -18,8 +18,8 @@ Researcher is an autonomous agent powered by Mistral LLMs that helps you iterati
 ## Installation
 
 ```bash
-git clone https://github.com/tcapelle/phd_researcher.git
-cd phd_researcher
+git clone https://github.com/tcapelle/simple_agent.git
+cd researcher
 pip install -e .
 ```
 
