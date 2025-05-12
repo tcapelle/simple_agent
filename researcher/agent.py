@@ -6,10 +6,10 @@ from mistralai import Mistral
 
 import weave
 
-from .mistral_helper import MistralAIStream
-from .console import Console
-from .tool_calling import function_tool, perform_tool_calls
-from .state import AgentState
+from researcher.mistral_helper import MistralAIStream
+from researcher.console import Console
+from researcher.tool_calling import function_tool, perform_tool_calls
+from researcher.state import AgentState
 
 client = Mistral(os.getenv("MISTRAL_API_KEY"))
 
