@@ -55,10 +55,7 @@ def session(agent: Agent, agent_state: AgentState):
 
 
 def get_initial_prompt() -> str:
-    if len(sys.argv) < 2:
-        return get_user_input("Initial prompt: ")
-    initial_prompt = " ".join(sys.argv[1:])
-    print("Initial prompt:", initial_prompt)
+    initial_prompt = get_user_input("Initial prompt: ")
     return initial_prompt
 
 
